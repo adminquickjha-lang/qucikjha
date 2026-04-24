@@ -15,7 +15,7 @@ use Laravel\Ai\Promptable;
 use Stringable;
 
 #[Temperature(0.0)]
-#[Timeout(180)]
+#[Timeout(300)]
 #[MaxTokens(16000)]
 class JhaAgent implements Agent, Conversational, HasTools
 {
