@@ -111,5 +111,11 @@ Route::get('/review/secure/{token}', function ($token) {
 })->name('review.secure');
 
 Route::post('/stripe/webhook', [StripeController::class, 'webhook'])->name('stripe.webhook');
-
-require __DIR__.'/auth.php';
+Route::get('/env-check', function () {
+    return [
+        'APP_ENV' => env('APP_ENV'),
+        'APP_URL' => env('APP_URL'),
+        'DB_CONNECTION' => env('DB_CONNECTION'),
+    ];
+});
+require __DIR__ . '/auth.php';
