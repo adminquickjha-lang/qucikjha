@@ -1,0 +1,934 @@
+<?php
+
+use Livewire\Attributes\Layout;
+use Livewire\Volt\Component;
+use App\Models\Setting;
+
+new #[Layout('layouts.safety')] class extends Component {
+    public $id;
+    public $paid = false;
+    public $project;
+
+    public $isEditing = false;
+    public $projectName;
+    public $projectLocation;
+    public $preparedBy;
+    public $safetyCoordinator;
+    public $companyName;
+    public $competentPerson;
+    public $steps = [];
+    public $hazardsChecklist = [];
+
+    // Review Feature
+    public $showReviewModal = false;
+    public $reviewRequest = '';
+    public $isReviewing = false;
+    public $reviewCount = 0;
+
+    // Professional Review Feature
+    public $showProfessionalReviewModal = false;
+    public $professionalReviewMessage = '';
+    public $activeReviewId;
+
+    public function mount($id)
+    {
+        $this->id = $id;
+        $this->project = \App\Models\SafetyDocument::findOrFail($id);
+        $this->paid = $this->project->is_paid;
+
+        $this->projectName = $this->project->project_name;
+        $this->projectLocation = $this->project->project_location;
+        $this->companyName = $this->project->company_name;
+        $this->preparedBy = $this->project->prepared_by;
+        $this->safetyCoordinator = $this->project->safety_coordinator;
+        $this->competentPerson = $this->project->competent_person;
+
+        $this->steps = $this->project->ai_response['steps'] ?? [];
+
+        // Ensure each step has a step_description for wire:model binding
+        foreach ($this->steps as &$step) {
+            $rawStep = $step['step_description'] ?? $step['step'] ?? '';
+            // Strip leading "1. " or "1) " style numbering from the string
+            $step['step_description'] = preg_replace('/^\d+[\.\)]\s*/', '', $rawStep);
+        }
+
+        $this->hazardsChecklist = $this->project->ai_response['hazards_checklist'] ?? [];
+        $this->reviewCount = $this->project->ai_response['review_count'] ?? 0;
+    }
+
+    public function jhaHazards()
+    {
+        return $this->steps;
+    }
+
+    public function toggleEdit()
+    {
+        if (!$this->paid)
+            return;
+        $this->isEditing = !$this->isEditing;
+    }
+
+    public function save()
+    {
+        if (!$this->paid)
+            return;
+
+        $aiResponse = $this->project->ai_response;
+        $aiResponse['steps'] = $this->steps;
+        $aiResponse['hazards_checklist'] = $this->hazardsChecklist;
+
+        $this->project->update([
+            'project_name' => $this->projectName,
+            'project_location' => $this->projectLocation,
+            'company_name' => $this->companyName,
+            'prepared_by' => $this->preparedBy,
+            'safety_coordinator' => $this->safetyCoordinator,
+            'competent_person' => $this->competentPerson,
+            'ai_response' => $aiResponse,
+        ]);
+
+        $this->isEditing = false;
+        $this->dispatch('notify', ['message' => 'Document updated successfully!', 'type' => 'success']);
+    }
+
+    public function handlePayment($method = null)
+    {
+        if ($method === 'stripe') {
+            return redirect()->route('stripe.checkout', ['document' => $this->id]);
+        }
+        if ($method === 'paypal') {
+            return redirect()->route('paypal.checkout', ['document' => $this->id]);
+        }
+
+        $this->paymentSuccess = true;
+
+        sleep(1); // Simulate network
+
+        $this->project->update(['is_paid' => true]);
+        $this->paid = true;
+        $this->showModal = false;
+        $this->paymentSuccess = false;
+    }
+
+    public function review()
+    {
+        set_time_limit(300);
+        if (!$this->paid)
+            return;
+
+        if ($this->reviewCount >= 5) {
+            $this->dispatch('notify', ['message' => 'Review limit reached (Max 5 per document).', 'type' => 'error']);
+            $this->showReviewModal = false;
+            return;
+        }
+
+        $this->validate([
+            'reviewRequest' => 'required|string|min:10|max:1000'
+        ]);
+
+        try {
+            $this->isReviewing = true;
+
+            $agent = new \App\Ai\Agents\ReviewAgent($this->project);
+            $aiResponse = $agent->prompt($this->reviewRequest, model: 'claude-haiku-4-5');
+            $content = $aiResponse->text;
+
+            // Robust JSON extraction: find the first { and last }
+            $firstBrace = strpos($content, '{');
+            $lastBrace = strrpos($content, '}');
+            if ($firstBrace !== false && $lastBrace !== false) {
+                $content = substr($content, $firstBrace, $lastBrace - $firstBrace + 1);
+            }
+
+            $newData = json_decode(trim($content), true);
+
+            if (!$newData) {
+                \Illuminate\Support\Facades\Log::error(' Invalid JSON', [
+                    'document_id' => $this->id,
+                    'raw_response' => $aiResponse->text
+                ]);
+                throw new \Exception("invalid format. Please try again with a more specific request.");
+            }
+
+            // Support multiple possible keys for steps
+            $stepsKey = isset($newData['steps']) ? 'steps' : (isset($newData['jsa_steps']) ? 'jsa_steps' : (isset($newData['safety_steps']) ? 'safety_steps' : null));
+
+            if (!$stepsKey) {
+                \Illuminate\Support\Facades\Log::error('AI Review Failed - Missing steps key', [
+                    'document_id' => $this->id,
+                    'json_keys' => array_keys($newData)
+                ]);
+                throw new \Exception("please check instruction. Please try being more specific.");
+            }
+
+            // Increment review count and update project
+            $newData['review_count'] = $this->reviewCount + 1;
+
+            $this->project->update([
+                'ai_response' => $newData
+            ]);
+
+            // Re-mount to refresh everything
+            $this->mount($this->id);
+
+            $this->reviewRequest = '';
+            $this->showReviewModal = false;
+            $this->dispatch('swal', ['title' => 'Document Improved!', 'text' => 'The changes have been applied to your safety document.', 'icon' => 'success']);
+        } catch (\Exception $e) {
+            $this->dispatch('swal', ['title' => 'Review failed!', 'text' => $e->getMessage(), 'icon' => 'error']);
+        } finally {
+            $this->isReviewing = false;
+        }
+    }
+
+    public function startProfessionalReview()
+    {
+        if (empty(trim($this->professionalReviewMessage))) {
+            $this->dispatch('swal', ['title' => 'Instructions Required', 'text' => 'Please enter some instructions for our professional team.', 'icon' => 'warning']);
+            return;
+        }
+
+        $review = \App\Models\ProfessionalReview::create([
+            'user_id' => auth()->id(),
+            'safety_document_id' => $this->id,
+            'message' => $this->professionalReviewMessage,
+            'token' => \Illuminate\Support\Str::random(60),
+            'progress' => 1,
+            'is_paid' => false,
+        ]);
+
+        $this->activeReviewId = $review->id;
+        $this->showProfessionalReviewModal = false;
+
+        return $this->handleProfessionalReviewPayment('stripe');
+    }
+
+    public function handleProfessionalReviewPayment($method)
+    {
+        if ($method === 'stripe') {
+            return redirect()->route('stripe.review-checkout', ['review' => $this->activeReviewId]);
+        }
+        if ($method === 'paypal') {
+            return redirect()->route('paypal.review-checkout', ['review' => $this->activeReviewId]);
+        }
+
+        // Fake Payment Flow
+        $review = \App\Models\ProfessionalReview::findOrFail($this->activeReviewId);
+        $review->update(['is_paid' => true]);
+
+        // Notify Admin
+        $adminEmail = \App\Models\User::where('role', 'admin')->first()?->email ?? 'admin@example.com';
+        try {
+            \Illuminate\Support\Facades\Mail::to($adminEmail)->send(new \App\Mail\ProfessionalReviewRequestMail($review));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Mail failed: ' . $e->getMessage());
+        }
+
+        $this->showProfessionalReviewPaymentModal = false;
+        $this->dispatch('swal', ['title' => 'Success', 'text' => 'Your request has been forwarded to our professionals!', 'icon' => 'success']);
+    }
+
+    public function getPriceProperty()
+    {
+        $type = strtolower($this->project->document_type);
+        $settingKey = "{$type}_price";
+        return Setting::where('key', $settingKey)->value('value') ?? '19.90';
+    }
+
+    public function exportWord(\App\Services\AdobePdfService $adobeService)
+    {
+        if (!$this->paid && auth()->id() !== $this->project->user_id) {
+            return;
+        }
+
+        $document = $this->project;
+
+        // 1. Load admin-controlled template settings
+        $settings = \App\Models\Setting::whereIn('key', [
+            'header_color',
+            'table_header_color',
+            'rac_e_color',
+            'rac_h_color',
+            'rac_m_color',
+            'rac_l_color',
+            'required_ppe',
+            'disclaimer_text',
+        ])->pluck('value', 'key')->toArray();
+
+        // 2. Generate PDF first (Temp file)
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.safety-document-aha', compact('document', 'settings'))
+            ->setPaper('a4', 'landscape')
+            ->setOptions(['isPhpEnabled' => true]);
+
+        $pdfFileName = 'temp_' . $document->id . '.pdf';
+        $pdfPath = storage_path('app/public/' . $pdfFileName);
+        $pdf->save($pdfPath);
+
+        try {
+            // 3. Convert to Word using Adobe
+            $downloadUrl = $adobeService->convertPdfToDocx($pdfPath);
+
+            // 4. Download file from Adobe and send to user
+            $wordContent = $adobeService->downloadAsset($downloadUrl);
+            $cleanName = str_replace([' ', '/', '\\'], '_', $document->project_name);
+            $wordFileName = "{$document->document_type}_{$cleanName}_{$document->id}.docx";
+
+            // Cleanup temp PDF
+            if (file_exists($pdfPath))
+                unlink($pdfPath);
+
+            return response()->streamDownload(function () use ($wordContent) {
+                echo $wordContent;
+            }, $wordFileName);
+
+        } catch (\Exception $e) {
+            // Cleanup on failure
+            if (file_exists($pdfPath))
+                unlink($pdfPath);
+
+            \Illuminate\Support\Facades\Log::error('Adobe Conversion Failed: ' . $e->getMessage());
+            $this->dispatch('notify', ['message' => 'Word conversion failed. Please try again.', 'type' => 'error']);
+            return;
+        }
+    }
+}; ?>
+
+<div class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
+    <!-- Header Controls -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 print:hidden">
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="bg-primary text-primary-foreground font-black px-3 py-1 rounded-full text-[9px] uppercase tracking-widest shadow-lg shadow-primary/20">
+                    {{ $project->document_type }}
+                </span>
+                <span class="px-3 py-1 rounded-full text-[9px] uppercase tracking-widest font-black flex items-center gap-2 {{ $paid ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-secondary text-black border border-border' }}">
+                    @if($paid)
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                        Paid & Unlocked
+                    @else
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        Preview Mode
+                    @endif
+                </span>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-black tracking-tighter leading-tight break-words">{{ Str::limit($project->project_name, 100) }}</h1>
+            <p class="text-xs font-medium text-black mt-2">Safety Analysis Report • Ref: #{{ substr($id, 0, 8) }}</p>
+        </div>
+        <div class="flex flex-col gap-3 w-full sm:w-fit">
+            @if($paid)
+                @if($isEditing)
+                    <div class="flex flex-wrap gap-3 w-full">
+                        <button wire:click="save" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            Save
+                        </button>
+                        <button wire:click="toggleEdit" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
+                            Cancel
+                        </button>
+                    </div>
+                @else
+                    <div class="flex flex-wrap gap-3 w-full">
+                        <a href="{{ route('document.pdf', ['id' => $id]) }}" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                            PDF
+                        </a>
+                        <button wire:click="exportWord" wire:loading.attr="disabled" wire:target="exportWord" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-50 whitespace-nowrap">
+                            <svg wire:loading.remove wire:target="exportWord" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            <svg wire:loading wire:target="exportWord" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                            <span wire:loading.remove wire:target="exportWord">Word</span>
+                            <span wire:loading wire:target="exportWord">Exporting...</span>
+                        </button>
+                        <button wire:click="toggleEdit" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            Edit
+                        </button>
+                    </div>
+
+                    <div class="flex flex-wrap gap-3 w-full">
+                        @if($reviewCount < 5)
+                            <button wire:click="$set('showReviewModal', true)" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                Review ({{ 5 - $reviewCount }})
+                            </button>
+                        @endif
+
+                        <button wire:click="$set('showProfessionalReviewModal', true)" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>
+                            Professional Review ($5)
+                        </button>
+                    </div>
+                @endif
+            @else
+                <button wire:click="handlePayment('stripe')" class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                    Unlock Document — ${{ $this->price }}
+                </button>
+            @endif
+        </div>
+    </div>
+
+    <!-- Document Rendering Container -->
+        <div class="relative">
+        @if(!$paid)
+            <div class="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none overflow-hidden print:hidden">
+                <div class="bg-foreground text-background px-12 py-5 rounded-3xl font-black shadow-2xl rotate-[-7deg] text-2xl tracking-[0.3em] uppercase opacity-90 scale-110">
+                    Preview Only
+                </div>
+                <div class="absolute inset-0 grid grid-cols-2 md:grid-cols-4 gap-20 opacity-[0.03] select-none text-[80px] font-black -rotate-12 pointer-events-none">
+                    @for($i = 0; $i < 20; $i++)
+                        <span class="whitespace-nowrap italic">DRAFT ONLY • PREVIEW ONLY</span>
+                    @endfor
+                </div>
+            </div>
+        @endif
+
+        @php
+            $headerColor = \App\Models\Setting::where('key', 'header_color')->value('value') ?? '#1a3a6b';
+            $tableHeaderColor = \App\Models\Setting::where('key', 'aha_table_header_color')->value('value') ?? \App\Models\Setting::where('key', 'table_header_color')->value('value') ?? '#2c5f9e';
+            $racEColor = \App\Models\Setting::where('key', 'rac_e_color')->value('value') ?? '#c0392b';
+            $racHColor = \App\Models\Setting::where('key', 'rac_h_color')->value('value') ?? '#e67e22';
+            $racMColor = \App\Models\Setting::where('key', 'rac_m_color')->value('value') ?? '#f1c40f';
+            $racLColor = \App\Models\Setting::where('key', 'rac_l_color')->value('value') ?? '#27ae60';
+            $requiredPpeRaw = $this->project->ai_response['required_ppe'] ?? 'Hard hat, Safety glasses, Hearing protection, Safety-toed work shoes.';
+            $requiredPpe = is_array($requiredPpeRaw) ? implode(', ', $requiredPpeRaw) : (string) $requiredPpeRaw;
+            $disclaimerText = \App\Models\Setting::where('key', 'disclaimer_text')->value('value') ?? 'This JHA has been reviewed for general compliance with jobsite safety requirements.';
+
+            $racColors = ['E' => $racEColor, 'H' => $racHColor, 'M' => $racMColor, 'L' => $racLColor, 'Extreme' => $racEColor, 'High' => $racHColor, 'Medium' => $racMColor, 'Low' => $racLColor];
+            $steps = $this->jhaHazards();
+            $overallRac = collect($steps)->pluck('rac')->sortByDesc(fn($r) => ['E' => 4, 'H' => 3, 'M' => 2, 'L' => 1][$r] ?? 0)->first() ?? 'M';
+        @endphp
+
+        <div class="bg-white ring-1 ring-border shadow-2xl overflow-x-auto font-['Arial',sans-serif] text-sm print:shadow-none p-4 md:p-10">
+            <div class="min-w-[900px]">
+
+            {{-- Refined Standardized JHA Header --}}
+            <div class="bg-white p-4">
+                {{-- Logo Section --}}
+                <div class="flex justify-center mb-6">
+                    @php
+                        $logoSrc = '';
+                        $customLogoPath = $project->logo_path;
+
+                        if ($customLogoPath && \Storage::disk('public')->exists($customLogoPath)) {
+                            $fullPath = \Storage::disk('public')->path($customLogoPath);
+                            $logoData = base64_encode(file_get_contents($fullPath));
+                            $logoMime = mime_content_type($fullPath);
+                            $logoSrc = 'data:' . $logoMime . ';base64,' . $logoData;
+                        } else {
+                            $fallbackLogo = public_path('logo.svg');
+                            if (file_exists($fallbackLogo)) {
+                                $logoData = base64_encode(file_get_contents($fallbackLogo));
+                                $logoMime = mime_content_type($fallbackLogo);
+                                $logoSrc = 'data:' . $logoMime . ';base64,' . $logoData;
+                            }
+                        }
+                    @endphp
+                    @if($logoSrc)
+                        <img src="{{ $logoSrc }}" class="max-h-20 w-auto object-contain" alt="Logo" />
+                    @endif
+                </div>
+
+                {{-- Title Section --}}
+                <div class="mb-1  px-1">
+                    <h1 class="text-[30px] font-bold" style="margin-bottom: 5px; padding: 20px 0;">ACTIVITY HAZARD ANALYSIS(AHA)</h1>
+                </div>
+
+                {{-- The Main Grid Table --}}
+                <div class="text-black">
+                    <table style="width: 100%; border: 1px solid #000; border-collapse: collapse; table-layout: fixed; color: #000; font-family: Arial, sans-serif;">
+                        <tr>
+                            <!-- Left Column: Consolidated Project Info -->
+                            <td rowspan="3" style="width: 50.33%; border: 1px solid #000; padding: 0; vertical-align: top;">
+                                <table style="width: 100%; border-collapse: collapse; border: none;">
+                                    <tr>
+                                        <td style="padding: 8px; border-bottom: 1px solid #000; font-size: 16px; word-break: normal; overflow-wrap: anywhere;">
+                                            Activity/Work Task: 
+                                            @if($isEditing)
+                                                <input type="text" wire:model="projectName" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
+                                            @else
+                                                <strong class="text-[16px]">{{ Str::limit($projectName, 100) }}</strong>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 7px; border-bottom: 1px solid #000; font-size: 16px; word-break: normal; overflow-wrap: anywhere;">
+                                            Activity Location: 
+                                            @if($isEditing)
+                                                <input type="text" wire:model="projectLocation" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
+                                            @else
+                                                <strong class="text-[16px]">{{ Str::limit($projectLocation, 100) }}</strong>
+                                            @endif
+                                        </td>
+                                    </tr>
+
+
+                                    <tr>
+                                        <td style="padding: 7px; border-bottom: 1px solid #000; font-size: 16px; word-break: normal; overflow-wrap: anywhere;">
+                                            Date Prepared: <strong>{{ $project->created_at->format('m/d/y') }}</strong>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 7px; border-bottom: 1px solid #000; font-size: 16px; word-break: normal; overflow-wrap: anywhere;">
+                                            Prepared By (Name/Title): 
+                                            @if($isEditing)
+                                                <input type="text" wire:model="preparedBy" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
+                                            @else
+                                                <strong class="text-[14px]">{{ Str::limit($preparedBy ?? '—', 100) }}</strong>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 7px; border-bottom: 1px solid #000; font-size: 16px; word-break: normal; overflow-wrap: anywhere;">
+                                            Reviewed By (Name/Title): 
+                                            @if($isEditing)
+                                                <input type="text" wire:model="safetyCoordinator" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
+                                            @else
+                                                <strong class="text-[14px]">{{ Str::limit($safetyCoordinator ?? '—', 100) }}</strong>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                <tr>
+                                    <td style="padding: 6px; font-size: 16px; line-height: 1.2; word-break: normal; overflow-wrap: anywhere;">
+                                             Company Name : 
+                                             @if($isEditing)
+                                                <input type="text" wire:model="companyName" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
+                                             @else
+                                                <strong class="text-[14px]">{{ Str::limit($companyName ?? '—', 100) }}</strong>
+                                             @endif
+                                        </td>
+                                <tr>
+                                    
+                                </tr>
+                                </tr>
+                                </table>
+                            </td>
+
+                            <!-- Right Column: RAC Information -->
+                            <td style="width: 49.66%; border: 1px solid #000; padding: 2px; vertical-align: middle;">
+                                <table style="width: 100%; border-collapse: collapse; border: none;">
+                                    <tr>
+                                        <td style="font-size: 15px; width: 80%; line-height: 1.1;">Overall Risk Assessment Code (RAC) (Use highest code)</td>
+                                        <td style="width: 20%; text-align: center;">
+                                            <div style="border: 3px solid #000; padding: 3px 0; font-weight: bold; width: 50px; margin: 0 auto; background: #fff; font-size: 28px;">
+                                                {{ strtoupper(substr($overallRac, 0, 1)) }}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="border: 1px solid #000; padding: 6px; font-size: 16px; font-weight: bold; text-transform: uppercase; background: #fff; text-align: center; color: #000;">
+                                Risk Assessment Code (RAC) Matrix
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td style="border: 1px solid #000; padding: 0; vertical-align: top;">
+                                <table style="width: 100%; border-collapse: collapse; text-align: center; font-weight: bold; font-size: 10px;">
+                                    <thead>
+                                        <tr style="border-bottom: 1px solid #000;">
+                                            <th rowspan="2" style="border-right: 1px solid #000; width: 30%; padding: 2px; background: #fff; color: #000; font-size: 15px;">Severity</th>
+                                            <th colspan="5" style="padding: 4px; text-transform: uppercase; background: #fff; color: #000; border-bottom: 1px solid #000; font-size: 15px;"><strong>Probability</strong></th>
+                                        </tr>
+                                        <tr style="border-bottom: 1px solid #000;">
+                                            <th style="border-right: 1px solid #000; font-weight: bold; font-size: 15px; background: #fff;">Freq.</th>
+                                            <th style="border-right: 1px solid #000; font-weight: bold; font-size: 15px; background: #fff;">Likely</th>
+                                            <th style="border-right: 1px solid #000; font-weight: bold; font-size: 15px; background: #fff;">Occas.</th>
+                                            <th style="border-right: 1px solid #000; font-weight: bold; font-size: 15px; background: #fff;">Seldom</th>
+                                            <th style="font-weight: bold; font-size: 16px; background: #fff;">Unlikely</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr style="border-bottom: 1px solid #000;">
+                                            <td style="border-right: 1px solid #000; padding: 3px; text-align: center; background: #fff; text-transform: uppercase; font-size: 15px; font-weight: bold;">Catastrophic</td>
+                                            <td style="background: {{ $racEColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">E</td>
+                                            <td style="background: {{ $racEColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">E</td>
+                                            <td style="background: {{ $racHColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">H</td>
+                                            <td style="background: {{ $racHColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">H</td>
+                                            <td style="background: {{ $racMColor }}; color: #000; font-size: 15px;">M</td>
+                                        </tr>
+                                        <tr style="border-bottom: 1px solid #000;">
+                                            <td style="border-right: 1px solid #000; padding: 3px; text-align: center; background: #fff; text-transform: uppercase; font-size: 15px; font-weight: bold;">Critical</td>
+                                            <td style="background: {{ $racEColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">E</td>
+                                            <td style="background: {{ $racHColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">H</td>
+                                            <td style="background: {{ $racHColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">H</td>
+                                            <td style="background: {{ $racMColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">M</td>
+                                            <td style="background: {{ $racLColor }}; color: #000; font-size: 15px;">L</td>
+                                        </tr>
+                                        <tr style="border-bottom: 1px solid #000;">
+                                            <td style="border-right: 1px solid #000; padding: 3px; text-align: center; background: #fff; text-transform: uppercase; font-size: 15px; font-weight: bold;">Marginal</td>
+                                            <td style="background: {{ $racHColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">H</td>
+                                            <td style="background: {{ $racMColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">M</td>
+                                            <td style="background: {{ $racMColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">M</td>
+                                            <td style="background: {{ $racLColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">L</td>
+                                            <td style="background: {{ $racLColor }}; color: #000; font-size: 15px;">L</td>
+                                        </tr>
+                                        <tr style="border-bottom: 1px solid #000;">
+                                            <td style="border-right: 1px solid #000; padding: 3px; text-align: center; background: #fff; text-transform: uppercase; font-size: 15px; font-weight: bold;">Negligible</td>
+                                            <td style="background: {{ $racMColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">M</td>
+                                            <td style="background: {{ $racLColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">L</td>
+                                            <td style="background: {{ $racLColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">L</td>
+                                            <td style="background: {{ $racLColor }}; color: #000; border-right: 1px solid #000; font-size: 15px;">L</td>
+                                            <td style="background: {{ $racLColor }}; color: #000; font-size: 15px;">L</td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="6" style="padding: 1px; border-top: 1px solid #000; font-size: 10px; font-weight: bold; text-align: center;">
+                                                Review each "Hazard" with identified safety "Controls" and determine RAC (See above)
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+
+                        <!-- Row 4: Bottom section split (Instructions & RAC Chart) -->
+                        <tr>
+                            <td style="padding: 0; vertical-align: top;">
+                                <table style="width: 100%; border-collapse: collapse; border: none;">
+                                 
+                                    <tr>
+                                      <td style="padding: 6px; font-size: 16px; line-height: 1.2;">
+                                           Notes: (Field Notes, Review Comments, etc.)
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                            <td style="border: 1px solid #000; padding: 0; vertical-align: top;">
+                                <table style="width: 100%; border-collapse: collapse; border: none;">
+                                    <tr>
+                                        <td style="width: 60%; border-right: 1px solid #000; padding: 6px; font-size: 12px; vertical-align: top; line-height: 1.2;">
+                                            <p style="margin-bottom: 6px; border-bottom: 1px solid #000; text-align: justify;">Step 1: Review each "Hazard" with identified safety "Controls" and determine
+RAC (See above) </p>
+                                            <p style="margin-bottom: 6px; border-bottom: 1px solid #000; text-align: justify;"><strong>"Severity"</strong> is the outcome/degree if an incident, near miss, or accident did occur and identified as: Catastrophic, Critical, Marginal, or Negligible.</p>
+                                                <p style="text-align: justify;"><strong>"Severity" </strong> is the outcome/degree if an incident, near miss, or accident did
+occur and identified as: Catastrophic, Critical, Marginal, or Negligible 
+on AHA. </p>
+ <p style="text-align: justify; border-top: 1px solid #000;">Annotate the overall highest RAC at the top of AHA
+on AHA. </p>
+                                        </td>
+                                        <td style="width: 25%; padding: 0; vertical-align: top;">
+                                            <div style="background: #1a3a6b; color: #fff; font-size: 15px; font-weight: bold; text-align: center; padding: 10px; border-bottom: 1px solid #000; text-transform: uppercase; letter-spacing: 1px;">RAC Chart</div>
+                                            <div style="font-size: 14px; font-weight: bold;">
+                                                <div style="background: {{ $racEColor }}; color: #000; padding: 5px 5px; border-bottom: 1px solid #000; text-align: center;">E = Extremely High</div>
+                                                <div style="background: {{ $racHColor }}; color: #000; padding: 5px 5px; border-bottom: 1px solid #000; text-align: center;">H = High Risk</div>
+                                                <div style="background: {{ $racMColor }}; color: #000; padding: 5px 5px; border-bottom: 1px solid #000; text-align: center;">M = Moderate Risk</div>
+                                                <div style="background: {{ $racLColor }}; color: #000; padding: 5px 5px; text-align: center;">L = Low Risk</div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-[14px]">
+                    <thead>
+                        <tr class="text-white text-[11px] font-black uppercase tracking-widest" style="background-color: {{ $tableHeaderColor }}">
+                            <th class="px-3 py-3 border border-gray-400 text-center w-56 text-[16px]">Job Steps</th>
+                            <th class="px-3 py-3 border border-gray-400 text-center w-64 text-[16px]">Hazards</th>
+                            <th class="px-3 py-3 border border-gray-400 text-center text-[16px]">Risk Controls</th>
+                            <th class="px-3 py-3 border border-gray-400 text-center w-16 text-[16px]">RAC</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($steps as $i => $h)
+                            <tr class="bg-white" wire:key="step-{{ $i }}">
+                                <td class="px-3 py-3 border border-gray-300 font-bold text-gray-900 align-top">
+                                    {{ $i + 1 }}. 
+                                    @if($isEditing)
+                                        <textarea wire:model="steps.{{ $i }}.step_description" class="w-full border-0 p-0 focus:ring-0 font-bold bg-transparent resize-none" rows="3"></textarea>
+                                    @else
+                                        {{ preg_replace('/^(?:Step\s*\d+[\.\:\-\s]*|\d+[\.\-\s]+)+/i', '', $h['step_description'] ?? $h['step'] ?? 'N/A') }}
+                                    @endif
+                                </td>
+                                                    <td class="px-3 py-3 border border-gray-300 align-top text-black">
+                                                        @if($isEditing)
+                                                            @if(is_array($h['hazards']))
+                                                                <ol class="list-decimal ml-6 space-y-2">
+                                                                    @foreach($h['hazards'] as $hj => $hazard)
+                                                                        <li>
+                                                                            <input type="text" wire:model="steps.{{ $i }}.hazards.{{ $hj }}" class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                                        </li>
+                                                                    @endforeach
+                                                                </ol>
+                                                            @else
+                                                                <textarea wire:model="steps.{{ $i }}.hazards" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
+                                                            @endif
+                                                        @else
+                                                            @if(is_array($h['hazards']))
+                                                                <ol class="list-decimal ml-3 space-y-2">@foreach($h['hazards'] as $hazard)<li>{{ $hazard }}</li>@endforeach</ol>
+                                                            @else {!! nl2br(e($h['hazards'] ?? $h['hazard'] ?? 'N/A')) !!} @endif
+                                                        @endif
+                                                    </td>
+                                                    <td class="px-3 py-3 border border-gray-300 align-top text-black">
+                                                        @if($isEditing)
+                                                            @if(is_array($h['controls']))
+                                                                <ol class="list-decimal ml-6 space-y-2">
+                                                                    @foreach($h['controls'] as $hc => $control)
+                                                                        <li>
+                                                                            <input type="text" wire:model="steps.{{ $i }}.controls.{{ $hc }}" class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                                        </li>
+                                                                    @endforeach
+                                                                </ol>
+                                                            @else
+                                                                <textarea wire:model="steps.{{ $i }}.controls" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
+                                                            @endif
+                                                        @else
+                                                            @if(is_array($h['controls']))
+                                                                <ol class="list-decimal ml-3 space-y-2">@foreach($h['controls'] as $control)<li>{{ $control }}</li>@endforeach</ol>
+                                                            @else {!! nl2br(e($h['controls'] ?? $h['control'] ?? 'N/A')) !!} @endif
+                                                        @endif
+                                                </td>
+                                            @php 
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       $rac = $h['rac'] ?? $h['risk'] ?? 'N/A';
+                                                if (is_array($rac)) {
+                                                    $racChar = strtoupper(substr((string) ($rac[0] ?? 'N/A'), 0, 1));
+                                                    $racDisp = implode(', ', $rac);
+                                                } else {
+                                                    $racChar = strtoupper(substr((string) $rac, 0, 1));
+                                                    $racDisp = $rac;
+                                                }
+                                                $racColor = $racColors[$racChar] ?? $racColors[$rac] ?? '#9ca3af';
+                                                $textColor = in_array($racChar, ['M', 'L']) && $racColor == '#f1c40f' ? '#000' : (in_array($racChar, ['M']) ? '#000' : '#fff');
+                                            @endphp
+                                                    <td class="border border-gray-300 text-center align-middle font-black text-[14px]" style="background-color: {{ $racColor }}; color: {{ $textColor }}; width: 56px;">
+                                                        @if($isEditing)
+                                                            <select wire:model="steps.{{ $i }}.rac" class="bg-transparent border-0 p-0 font-black focus:ring-0 text-center">
+                                                                <option value="L">L</option>
+                                                                <option value="M">M</option>
+                                                                <option value="H">H</option>
+                                                                <option value="E">E</option>
+                                                            </select>
+                                                        @else
+                                                            {{ $racDisp }}
+                                                        @endif
+                                                    </td>
+                                                </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+
+            {{-- Hazards Checklist --}}
+            @php
+                $staticQuestions = [
+                    'Can someone be struck or contacted by anything while doing this job?',
+                    'Can someone strike against or make contact with any physical hazards?',
+                    'Can someone be exposed to any hazardous conditions?',
+                    'Can someone slip, trip or fall?',
+                    'Can someone strain or overexert?',
+                    'Can someone be caught in anything?',
+                    'Can someone fall into anything?',
+                    'Can damage to equipment occur?',
+                    'Can someone injure someone else?'
+                ];
+
+                $aiChecklist = $project->ai_response['hazards_checklist'] ?? [];
+
+                // Create a lookup for checked questions
+                // Handle both new array of objects and old array of strings
+                $checkedQuestions = [];
+                foreach ($aiChecklist as $item) {
+                    if (is_array($item) && isset($item['question'])) {
+                        if ($item['checked'] ?? false) {
+                            $checkedQuestions[] = trim($item['question']);
+                        }
+                    } elseif (is_string($item)) {
+                        $checkedQuestions[] = trim($item);
+                    }
+                }
+
+                $checklistData = array_map(function ($q) use ($checkedQuestions) {
+                    $isTableChecked = false;
+                    foreach ($checkedQuestions as $cq) {
+                        if (stripos($q, $cq) !== false || stripos($cq, $q) !== false) {
+                            $isTableChecked = true;
+                            break;
+                        }
+                    }
+                    return [
+                        'question' => $q,
+                        'checked' => $isTableChecked
+                    ];
+                }, $staticQuestions);
+
+                $chunks = array_chunk($checklistData, 3);
+            @endphp
+            <table class="w-full border-collapse mt-6" style="border: 1px solid #000;">
+                <thead>
+                    <tr style="background-color: {{ $tableHeaderColor }}; color: #000;">
+                        <th colspan="3" class="py-1 text-center font-bold text-[14px] border-b border-black uppercase tracking-wider text-white">Hazards Checklist</th>
+                    </tr>
+                </thead>
+                <tbody class="text-[11px]">
+                    <tr>
+                        @foreach($chunks as $chunk)
+                            <td class="border border-black p-2 w-1/3 align-top">
+                                <ul class="list-none m-0 p-0 space-y-1">
+                                    @foreach($chunk as $ci => $item)
+                                        <li class="flex items-start gap-2">
+                                            <span class="font-bold text-[18px] leading-none text-black cursor-pointer" @if($isEditing) wire:click="$set('hazardsChecklist.{{ $ci + (floor($loop->parent->index / 1)) * 3 }}', !{{ $item['checked'] ? 'true' : 'false' }})" @endif>
+                                                {!! $item['checked'] ? '☑' : '☐' !!}
+                                            </span>
+                                            <span class="text-black {{ $item['checked'] ? 'font-bold' : '' }}">
+                                                {{ $item['question'] }}
+                                            </span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </td>
+                        @endforeach
+                    </tr>
+                </tbody>
+            </table>
+
+            {{-- Approvals Section --}}
+            <table class="w-full border-collapse mt-0" style="border: 1px solid #000; border-top: none;">
+                <tbody class="text-[12px]">
+                    @for($r = 0; $r < 2; $r++)
+                        <tr>
+                            @for($c = 0; $c < 3; $c++)
+                                <td class="border border-black p-0 w-1/3 align-top">
+                                    <div class="font-bold p-1 border-b border-black">Approvals (Sign/Date)</div>
+                                    <div class="h-16 bg-[#f8faff]"></div>
+                                </td>
+                            @endfor
+                        </tr>
+                    @endfor
+                </tbody>
+            </table>
+
+
+
+            <div class="px-4 py-8 text-[13px] text-black text-justify leading-relaxed border-t border-gray-100 break-words mt-10 font-sans">
+                <strong class="text-black font-bold">Disclaimer:</strong> {{ \App\Models\Setting::where('key', 'disclaimer_text')->value('value') ?? 'The user, contractor, employer, or project owner is responsible for confirming that the contents of this document appropriately reflect the specific work activities, site conditions, and applicable laws, regulations, and project requirements before implementation. While reasonable efforts are made to provide useful and structured safety information, the provider shall not be liable for any damage, claim, or legal action arising from the use of this document.' }}
+            </div>
+
+
+            </div>
+        </div>
+    @if($showReviewModal)
+        <div 
+            x-data="{ show: @entangle('showReviewModal') }"
+            x-show="show"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4"
+        >
+            <div 
+                @click.away="show = false"
+                x-show="show"
+                x-transition:enter="transition ease-out duration-300 transform"
+                x-transition:enter-start="opacity-0 scale-95 translate-y-4"
+                x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                x-transition:leave="transition ease-in duration-200 transform"
+                x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                x-transition:leave-end="opacity-0 scale-95 translate-y-4"
+                class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative"
+            >
+                <button @click="show = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+
+                <div class="mb-8 text-center flex flex-col items-center">
+                    <div class="mb-6">
+                        <img src="/logo.svg" alt="QuickJHA Logo" class="h-12 w-auto object-contain" />
+                    </div>
+                    <h3 class="text-2xl font-black text-slate-900 uppercase tracking-tighter italic">Review Document</h3>
+                    <p class="text-slate-500 font-medium mt-2">Tell us exactly what you want to improve or add to your document. Remaining reviews: {{ 5 - $reviewCount }}</p>
+                </div>
+
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Improvement Request</label>
+                        <textarea wire:model="reviewRequest" 
+                            class="w-full rounded-2xl bg-slate-50 border-0 ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 p-4 min-h-[150px] font-medium text-slate-900 placeholder:text-slate-300 transition-all"
+                            placeholder="e.g., 'Add more detailed controls for working at heights' or 'Include specific safety regulations for electrical tools'"></textarea>
+                        @error('reviewRequest') <span class="text-rose-600 text-[10px] font-bold uppercase mt-2 block">{{ $message }}</span> @enderror
+                    </div>
+
+                    <button wire:click="review" wire:loading.attr="disabled"
+                        class="w-full bg-primary text-primary-foreground font-black py-4 rounded-2xl uppercase tracking-widest text-sm hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed group">
+                        <span wire:loading.remove wire:target="review" class="flex items-center justify-center gap-2">
+                            Apply Changes
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="group-hover:translate-x-1 transition-transform"><path d="m9 18 6-6-6-6"/></svg>
+                        </span>
+                        <span wire:loading wire:target="review" class="flex items-center justify-center">
+                            <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                        </span>
+                    </button>
+
+                    <p class="text-[10px] text-center text-slate-400 font-bold uppercase tracking-tight">
+                        Note: This will replace your current analysis with the improved version.
+                    </p>
+                </div>
+            </div>
+        </div>
+    @endif
+
+
+
+    {{-- Professional Review Instructions Modal --}}
+    @if($showProfessionalReviewModal)
+        <div 
+            x-data="{ show: @entangle('showProfessionalReviewModal') }"
+            x-show="show"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4"
+        >
+            <div 
+                x-show="show"
+                x-transition:enter="transition ease-out duration-300 transform"
+                x-transition:enter-start="opacity-0 scale-95 translate-y-4"
+                x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                x-transition:leave="transition ease-in duration-200 transform"
+                x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                x-transition:leave-end="opacity-0 scale-95 translate-y-4"
+                class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative"
+            >
+                <button @click="show = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+
+                <div class="mb-8 text-center flex flex-col items-center">
+                    <div class="mb-6">
+                        <img src="/logo.svg" alt="QuickJHA Logo" class="h-12 w-auto object-contain" />
+                    </div>
+                    <h3 class="text-2xl font-black text-slate-900 uppercase tracking-tighter italic">Professional Review</h3>
+                    <p class="text-slate-500 font-medium mt-2">Your document will be reviewed by our professional team for $5. Tell us what level of improvements you need.</p>
+                </div>
+
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Instructions</label>
+                        <textarea wire:model="professionalReviewMessage" 
+                            class="w-full rounded-2xl bg-slate-50 border-0 ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 p-4 min-h-[150px] font-medium text-slate-900 placeholder:text-slate-300 transition-all"
+                            placeholder="e.g., 'Ensure all roof safety protocols are covered...'"></textarea>
+                    </div>
+
+                    <button wire:click="startProfessionalReview" 
+                        class="w-full bg-primary text-primary-foreground font-black py-4 rounded-2xl uppercase tracking-widest text-sm hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group">
+                        <span class="flex items-center justify-center gap-2">
+                            Request Expert Review ($5)
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
+</div>
