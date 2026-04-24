@@ -118,4 +118,13 @@ Route::get('/env-check', function () {
         'DB_CONNECTION' => env('DB_CONNECTION'),
     ];
 });
+
+Route::get('/anthropic-test', function () {
+    try {
+        $response = Http::timeout(30)->get('https://api.anthropic.com');
+        return $response->status();
+    } catch (\Exception $e) {
+        return $e->getMessage();
+    }
+});
 require __DIR__ . '/auth.php';
