@@ -23,7 +23,7 @@
         <center>
             <div class="content">
                 <div class="header">
-                    <img src="{{ $message->embed(public_path('logo.svg')) }}" alt="QuickJHA" style="height: 60px; width: auto;">
+                    <img src="{{ $message->embed(public_path('logo.jpg')) }}" alt="QuickJHA" style="height: 60px; width: auto;">
                 </div>
                 <div class="body">
                     <div style="text-align: center;">
