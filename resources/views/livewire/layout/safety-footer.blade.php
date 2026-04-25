@@ -118,7 +118,7 @@ new class extends Component {
                                 <circle cx="12" cy="10" r="3" />
                             </svg>
                         </div>
-                        Building No 4, sector I-10/4, Islamabad
+                        Plot no, M22V+7Q5, 3A Korang Road, Markaz I 10 Markaz I-10, Islamabad, 44000
                     </li>
                 </ul>
             </div>
