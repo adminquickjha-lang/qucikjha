@@ -180,7 +180,22 @@ new #[Layout('layouts.safety')] class extends Component {
         try {
             $agent = new \App\Ai\Agents\JsaAgent($doc, $regulationsStr, $extraContext);
 
-            $aiResponse = $agent->prompt("Please generate the {$doc->document_type} JSON now based on the provided context.", attachments: $attachments, model: 'claude-sonnet-4-6');
+            $aiResponse = null;
+            $lastException = null;
+            for ($attempt = 1; $attempt <= 3; $attempt++) {
+                try {
+                    $aiResponse = $agent->prompt("Please generate the {$doc->document_type} JSON now based on the provided context.", attachments: $attachments);
+                    break;
+                } catch (\Exception $e) {
+                    $lastException = $e;
+                    if ($attempt < 3) {
+                        sleep(20);
+                    }
+                }
+            }
+            if ($aiResponse === null) {
+                throw $lastException;
+            }
 
             $content = $aiResponse->text;
 

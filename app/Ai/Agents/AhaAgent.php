@@ -4,16 +4,21 @@ namespace App\Ai\Agents;
 
 use App\Models\SafetyDocument;
 use Laravel\Ai\Attributes\MaxTokens;
+use Laravel\Ai\Attributes\Model;
+use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 
+#[Provider(Lab::Gemini)]
+#[Model('gemini-2.5-flash')]
 #[Temperature(0.0)]
 #[Timeout(300)]
 #[MaxTokens(16000)]
@@ -25,8 +30,7 @@ class AhaAgent implements Agent, Conversational, HasTools
         public SafetyDocument $document,
         public string $regulations,
         public string $extraContext = ''
-    ) {
-    }
+    ) {}
 
     /**
      * Get the instructions that the agent should follow.
@@ -42,8 +46,8 @@ class AhaAgent implements Agent, Conversational, HasTools
 Project Context:
 - Company: {$this->document->company_name}
 - Project: {$this->document->project_name}
-- Description: " . ($this->document->project_description ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS') . '
-- Equipment & Tools: ' . ($this->document->equipment_tools ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS') . "
+- Description: ".($this->document->project_description ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS').'
+- Equipment & Tools: '.($this->document->equipment_tools ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS')."
 - Project Location: {$this->document->project_location}
 - Applicable Regulations: {$this->regulations}
 

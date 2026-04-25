@@ -132,7 +132,7 @@ new #[Layout('layouts.safety')] class extends Component {
             $this->isReviewing = true;
 
             $agent = new \App\Ai\Agents\ReviewAgent($this->project);
-            $aiResponse = $agent->prompt($this->reviewRequest, model: 'claude-sonnet-4-6');
+            $aiResponse = $agent->prompt($this->reviewRequest);
             $content = $aiResponse->text;
 
             // Robust JSON extraction: find the first { and last }

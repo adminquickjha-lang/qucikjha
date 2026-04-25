@@ -4,16 +4,21 @@ namespace App\Ai\Agents;
 
 use App\Models\SafetyDocument;
 use Laravel\Ai\Attributes\MaxTokens;
+use Laravel\Ai\Attributes\Model;
+use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Conversational;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 
+#[Provider(Lab::Gemini)]
+#[Model('gemini-2.5-flash')]
 #[Temperature(0.0)]
 #[Timeout(300)]
 #[MaxTokens(16000)]
@@ -23,8 +28,7 @@ class ReviewAgent implements Agent, Conversational, HasTools
 
     public function __construct(
         public SafetyDocument $document,
-    ) {
-    }
+    ) {}
 
     /**
      * Get the instructions that the agent should follow.
