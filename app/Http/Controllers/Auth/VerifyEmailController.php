@@ -16,7 +16,7 @@ class VerifyEmailController extends Controller
         $user = User::findOrFail($request->route('id'));
 
         // Validate the hash matches the user's email
-        if (! hash_equals(sha256($user->getEmailForVerification()), (string) $request->route('hash'))) {
+        if (! hash_equals(sha1($user->getEmailForVerification()), (string) $request->route('hash'))) {
             abort(403, 'Invalid verification link.');
         }
 
