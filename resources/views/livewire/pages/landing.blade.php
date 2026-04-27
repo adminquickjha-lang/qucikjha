@@ -830,7 +830,7 @@ new #[Layout('layouts.safety', ['seoKey' => 'home'])] class extends Component {
                             </svg>
                             
                             <a href="https://www.google.com/maps?q=Interstate+35+Frontage+Rd,+Suite+400+Austin,+TX" target="_blank" class="text-sm font-bold hover:underline">
-                                Building No 4, sector I-10/4, Islamabad
+                                Plot no, M22V+7Q5, 3A Korang Road, Markaz I 10 Markaz I-10, Islamabad, 44000
                             </a>
                         </div>
                     </div>
