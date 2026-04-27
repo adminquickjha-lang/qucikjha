@@ -39,7 +39,7 @@ new #[Layout('layouts.safety', ['seoKey' => 'terms'])] class extends Component {
             <section>
                 <h2 class="text-2xl font-black text-slate-800 mb-4">4. Payments and Refunds</h2>
                 <p>QuickJHA operates on a pay-per-document basis. All payments are processed securely through our
-                    third-party payment processor (Stripe). Please refer to our Refund Policy for information regarding
+                    third-party payment processor (PayPal). Please refer to our Refund Policy for information regarding
                     cancellations and refunds.</p>
             </section>
 

@@ -202,7 +202,7 @@ new #[Layout('layouts.safety')] class extends Component {
         $this->activeReviewId = $review->id;
         $this->showProfessionalReviewModal = false;
         
-        return $this->handleProfessionalReviewPayment('stripe');
+        return $this->handleProfessionalReviewPayment('paypal');
     }
 
     public function handleProfessionalReviewPayment($method)
@@ -362,7 +362,7 @@ new #[Layout('layouts.safety')] class extends Component {
                     </div>
                 @endif
             @else
-                <button wire:click="handlePayment('stripe')" class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
+                <button wire:click="handlePayment('paypal')" class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
                     Unlock Document — ${{ $this->price }}
                 </button>
@@ -397,7 +397,8 @@ new #[Layout('layouts.safety')] class extends Component {
 
             $racColors = ['E' => $racEColor, 'H' => $racHColor, 'M' => $racMColor, 'L' => $racLColor, 'Extreme' => $racEColor, 'High' => $racHColor, 'Medium' => $racMColor, 'Low' => $racLColor];
             $steps = $this->jhaHazards();
-            $overallInitialRac = collect($steps)->pluck('initial_rac')->filter()->sortByDesc(fn($r) => ['E' => 4, 'H' => 3, 'M' => 2, 'L' => 1][$r] ?? 0)->first() ?? collect($steps)->pluck('rac')->sortByDesc(fn($r) => ['E' => 4, 'H' => 3, 'M' => 2, 'L' => 1][$r] ?? 0)->first() ?? 'M';
+            $racRank = fn($r) => is_string($r) ? (['E' => 4, 'H' => 3, 'M' => 2, 'L' => 1][$r] ?? 0) : 0;
+            $overallInitialRac = collect($steps)->pluck('initial_rac')->filter(fn($r) => is_string($r) && $r !== '')->sortByDesc($racRank)->first() ?? collect($steps)->pluck('rac')->filter(fn($r) => is_string($r) && $r !== '')->sortByDesc($racRank)->first() ?? 'M';
         @endphp
 
         <div class="bg-white ring-1 ring-border shadow-2xl overflow-x-auto font-['Arial',sans-serif] text-sm print:shadow-none p-4 md:p-10">
@@ -700,7 +701,8 @@ on JHA. </p>
                                 @endif
                         </td>
                         @php 
-                                                                                                    $initialRac = $h['initial_rac'] ?? $h['rac'] ?? $h['risk'] ?? 'N/A';
+                            $initialRacRaw = $h['initial_rac'] ?? $h['rac'] ?? $h['risk'] ?? 'N/A';
+                            $initialRac = is_array($initialRacRaw) ? ($initialRacRaw[0] ?? 'N/A') : $initialRacRaw;
                             $initialRacChar = strtoupper(substr((string) $initialRac, 0, 1));
                             $initialRacColor = $racColors[$initialRacChar] ?? '#9ca3af';
                             $initialTextColor = in_array($initialRacChar, ['M', 'L']) ? '#000' : '#fff';

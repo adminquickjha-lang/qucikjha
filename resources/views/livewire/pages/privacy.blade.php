@@ -20,7 +20,7 @@ new #[Layout('layouts.safety', ['seoKey' => 'privacy'])] class extends Component
                     <li>Name and email address</li>
                     <li>Company information</li>
                     <li>Project and task details entered into our document creator</li>
-                    <li>Payment information (processed by Stripe)</li>
+                    <li>Payment information (processed by PayPal)</li>
                 </ul>
             </section>
 
@@ -40,13 +40,13 @@ new #[Layout('layouts.safety', ['seoKey' => 'privacy'])] class extends Component
                 <h2 class="text-2xl font-black text-slate-800 mb-4">3. Data Security</h2>
                 <p>We take reasonable measures to help protect information about you from loss, theft, misuse, and
                     unauthorized access, disclosure, alteration, and destruction. All project data is stored securely
-                    and payment data is handled by Stripe using industry-standard encryption.</p>
+                    and payment data is handled by PayPal using industry-standard encryption.</p>
             </section>
 
             <section>
                 <h2 class="text-2xl font-black text-slate-800 mb-4">4. Sharing of Information</h2>
                 <p>We do not share your private project details or personal information with third parties except as
-                    required to provide our service (e.g., payment processing via Stripe) or if required by law.</p>
+                    required to provide our service (e.g., payment processing via PayPal) or if required by law.</p>
             </section>
 
             <section>

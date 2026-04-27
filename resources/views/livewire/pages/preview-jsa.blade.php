@@ -204,7 +204,7 @@ new #[Layout('layouts.safety')] class extends Component {
         $this->activeReviewId = $review->id;
         $this->showProfessionalReviewModal = false;
         
-        return $this->handleProfessionalReviewPayment('stripe');
+        return $this->handleProfessionalReviewPayment('paypal');
     }
 
     public function handleProfessionalReviewPayment($method)
@@ -364,7 +364,7 @@ new #[Layout('layouts.safety')] class extends Component {
                     </div>
                 @endif
             @else
-                <button wire:click="handlePayment('stripe')" class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
+                <button wire:click="handlePayment('paypal')" class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
                     Unlock Document — ${{ $this->price }}
                 </button>

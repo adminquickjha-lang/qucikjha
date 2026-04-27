@@ -37,7 +37,7 @@ new #[Layout('layouts.safety', ['seoKey' => 'refund'])] class extends Component 
                 <h2 class="text-2xl font-black text-slate-800 mb-4">4. Refund Process</h2>
                 <p>To request a refund for a technical issue, please email support@quickjha.com within 7 days of your
                     purchase. Please include your account email and the document ID (if available). Approved refunds
-                    will be credited back to the original payment method through Stripe within 5-10 business days.</p>
+                    will be credited back to the original payment method through PayPal within 5-10 business days.</p>
             </section>
         </div>
     </div>

@@ -26,20 +26,22 @@ class PayPalController extends Controller
         $token = $provider->getAccessToken();
 
         $response = $provider->createOrder([
-            "intent" => "CAPTURE",
-            "application_context" => [
-                "return_url" => route('paypal.success', ['document' => $document->id]),
-                "cancel_url" => route('preview.'.strtolower($document->document_type), ['id' => $document->id]),
+            'intent' => 'CAPTURE',
+            'application_context' => [
+                'return_url' => route('paypal.success', ['document' => $document->id]),
+                'cancel_url' => route('preview.'.strtolower($document->document_type), ['id' => $document->id]),
+                'landing_page' => 'BILLING',
+                'user_action' => 'PAY_NOW',
             ],
-            "purchase_units" => [
+            'purchase_units' => [
                 0 => [
-                    "amount" => [
-                        "currency_code" => "USD",
-                        "value" => number_format($price, 2, '.', '')
+                    'amount' => [
+                        'currency_code' => 'USD',
+                        'value' => number_format($price, 2, '.', ''),
                     ],
-                    "description" => 'Safety Document: '.$document->project_name
-                ]
-            ]
+                    'description' => 'Safety Document: '.$document->project_name,
+                ],
+            ],
         ]);
 
         if (isset($response['id']) && $response['id'] != null) {
@@ -51,11 +53,11 @@ class PayPalController extends Controller
 
             foreach ($response['links'] as $links) {
                 if ($links['rel'] == 'approve') {
-                    return redirect()->away($links['href']);
+                    return redirect()->away($this->cardCheckoutUrl($links['href']));
                 }
             }
         }
-        
+
         return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])->with('error', $response['message'] ?? 'Something went wrong with PayPal.');
     }
 
@@ -69,6 +71,7 @@ class PayPalController extends Controller
 
         if (isset($response['status']) && $response['status'] == 'COMPLETED') {
             $document->update(['is_paid' => true]);
+
             return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])->with('success', 'Document unlocked successfully via PayPal!');
         }
 
@@ -84,20 +87,22 @@ class PayPalController extends Controller
         $token = $provider->getAccessToken();
 
         $response = $provider->createOrder([
-            "intent" => "CAPTURE",
-            "application_context" => [
-                "return_url" => route('paypal.review-success', ['review' => $review->id]),
-                "cancel_url" => route('preview.'.strtolower($document->document_type), ['id' => $document->id]),
+            'intent' => 'CAPTURE',
+            'application_context' => [
+                'return_url' => route('paypal.review-success', ['review' => $review->id]),
+                'cancel_url' => route('preview.'.strtolower($document->document_type), ['id' => $document->id]),
+                'landing_page' => 'BILLING',
+                'user_action' => 'PAY_NOW',
             ],
-            "purchase_units" => [
+            'purchase_units' => [
                 0 => [
-                    "amount" => [
-                        "currency_code" => "USD",
-                        "value" => "5.00"
+                    'amount' => [
+                        'currency_code' => 'USD',
+                        'value' => '5.00',
                     ],
-                    "description" => 'Professional Review: '.$document->project_name
-                ]
-            ]
+                    'description' => 'Professional Review: '.$document->project_name,
+                ],
+            ],
         ]);
 
         if (isset($response['id']) && $response['id'] != null) {
@@ -105,11 +110,11 @@ class PayPalController extends Controller
 
             foreach ($response['links'] as $links) {
                 if ($links['rel'] == 'approve') {
-                    return redirect()->away($links['href']);
+                    return redirect()->away($this->cardCheckoutUrl($links['href']));
                 }
             }
         }
-        
+
         return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])->with('error', $response['message'] ?? 'Something went wrong with PayPal.');
     }
 
@@ -132,5 +137,16 @@ class PayPalController extends Controller
         }
 
         return redirect()->route('preview.'.strtolower($review->safetyDocument->document_type), ['id' => $review->safety_document_id])->with('error', 'PayPal payment verification failed.');
+    }
+
+    private function cardCheckoutUrl(string $approveUrl): string
+    {
+        parse_str(parse_url($approveUrl, PHP_URL_QUERY), $params);
+        $token = $params['token'] ?? '';
+        $base = config('paypal.mode') === 'sandbox'
+            ? 'https://www.sandbox.paypal.com'
+            : 'https://www.paypal.com';
+
+        return "{$base}/checkoutweb/signup?token={$token}";
     }
 }
