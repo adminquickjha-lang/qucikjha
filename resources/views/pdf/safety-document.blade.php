@@ -346,9 +346,9 @@
         $requiredPpeRaw = $document->ai_response['required_ppe'] ?? 'Hard hat, Safety glasses, Hearing protection, Safety-toed work shoes.';
         $requiredPpe = is_array($requiredPpeRaw) ? implode(', ', $requiredPpeRaw) : (string) $requiredPpeRaw;
 
-        $racValues = collect($document->ai_response['steps'] ?? [])->pluck('initial_rac')->filter()->toArray();
+        $racValues = collect($document->ai_response['steps'] ?? [])->pluck('initial_rac')->map(fn($r) => is_array($r) ? ($r[0] ?? null) : $r)->filter(fn($r) => is_string($r) && $r !== '')->toArray();
         if (empty($racValues)) {
-            $racValues = collect($document->ai_response['steps'] ?? [])->pluck('rac')->filter()->toArray();
+            $racValues = collect($document->ai_response['steps'] ?? [])->pluck('rac')->map(fn($r) => is_array($r) ? ($r[0] ?? null) : $r)->filter(fn($r) => is_string($r) && $r !== '')->toArray();
         }
         $racOrder = ['E' => 4, 'H' => 3, 'M' => 2, 'L' => 1];
         $overallRac = collect($racValues)->sortByDesc(fn($r) => $racOrder[$r] ?? 0)->first() ?? 'M';
@@ -677,7 +677,8 @@
                             $maxStepRows = max(count($hazards), count($controls));
                             $stepClass = ($i % 2 == 1) ? 'step-even' : 'step-odd';
 
-                            $initialRac = $step['initial_rac'] ?? $step['rac'] ?? $step['risk'] ?? 'N/A';
+                            $initialRacRaw = $step['initial_rac'] ?? $step['rac'] ?? $step['risk'] ?? 'N/A';
+                            $initialRac = is_array($initialRacRaw) ? ($initialRacRaw[0] ?? 'N/A') : $initialRacRaw;
                             $initialRacClass = '';
                             $initialRacChar = strtoupper(substr((string) $initialRac, 0, 1));
                             if (in_array($initialRacChar, ['E']))

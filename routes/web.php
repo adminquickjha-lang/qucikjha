@@ -80,6 +80,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/paypal/success/{document}', [\App\Http\Controllers\PayPalController::class, 'success'])->name('paypal.success');
 
 
+    // Test Checkout (local env only)
+    Route::get('/test/checkout/{document}', function (\App\Models\SafetyDocument $document) {
+        abort_unless(app()->isLocal(), 403);
+        $document->update(['is_paid' => true]);
+        return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])
+            ->with('success', 'Test checkout complete — document unlocked.');
+    })->name('test.checkout');
+
     // Document Downloads
     Route::get('/document/{id}/pdf', [DocumentController::class, 'pdf'])->name('document.pdf');
     Route::get('/document/{id}/word', [DocumentController::class, 'word'])->name('document.word');

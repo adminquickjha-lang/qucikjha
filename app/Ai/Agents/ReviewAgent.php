@@ -17,8 +17,8 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::Gemini)]
-#[Model('gemini-2.5-flash')]
+#[Provider(Lab::OpenRouter)]
+#[Model('openrouter/free')]
 #[Temperature(0.0)]
 #[Timeout(300)]
 #[MaxTokens(16000)]

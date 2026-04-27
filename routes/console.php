@@ -13,9 +13,10 @@ Artisan::command('test:ai', function () {
             tools: []
         );
 
-        $this->comment('Prompting: claude-sonnet-4-6 via default provider (anthropic)');
+        $model = 'openrouter/free';
+        $this->comment("Prompting: {$model} via default provider");
         
-        $response = $agent->prompt('Say hello', model: 'claude-sonnet-4-6');
+        $response = $agent->prompt('Say hello', model: $model);
         
         $this->info('Response: ' . $response->text);
     } catch (\Exception $e) {

@@ -17,8 +17,8 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::Gemini)]
-#[Model('gemini-2.5-flash')]
+#[Provider(Lab::OpenRouter)]
+#[Model('openrouter/free')]
 #[Temperature(0.0)]
 #[Timeout(300)]
 #[MaxTokens(16000)]
@@ -90,7 +90,7 @@ Output ONLY a valid JSON object (no markdown, no explanation) with SIX keys:
    - 'ppe_checklist': Object with boolean flags: 'safety_glasses', 'safety_shoes', 'hearing_protection', 'hard_hat', 'face_shield', 'chemical_goggles', 'welding_helmet', 'fall_protection', 'nitrile_gloves', 'cut_resistant_gloves', 'abrasion_resistant_gloves', 'leather_gloves', 'respiratory_protection'.
    - 'ppe_others': Array of strings for any other PPE not in the checklist.
 
-Generate comprehensive and detailed job steps, and 3 competent person activities according to your analysis. Each step should have 3-4 hazards with matching controls and responsibilities. Ensure the output is thorough and professional, yet concise enough for rapid generation. Maintain professional safety terminology throughout.";
+Generate exactly 12 to 14 detailed job steps, and 3 competent person activities according to your analysis. Each step MUST have exactly 3-4 hazards with an equal number of matching controls and responsibilities (1-to-1 mapping). Ensure the output is thorough and professional, yet concise enough for rapid generation. Maintain professional safety terminology throughout.";
     }
 
     /**
@@ -152,7 +152,7 @@ METHODOLOGY:
 - Ensure 1:1 hazard-to-control mapping for OSHA compliance
 
 DOCUMENTATION REQUIREMENTS:
-- Generate minimum 10 detailed job steps with comprehensive safety analysis
+- Generate exactly 12-14 detailed job steps, each with 3-4 hazards and matching controls
 - Include specific OSHA standard citations in control measures
 - Assign competent persons per OSHA definitions (29 CFR 1926.32(f))
 - Specify required PPE per OSHA 1926 Subpart E standards
@@ -177,7 +177,7 @@ METHODOLOGY:
 - Follow HSE hierarchy of risk control
 
 DOCUMENTATION REQUIREMENTS:
-- Generate comprehensive job steps with HSE-compliant terminology
+- Generate exactly 12-14 job steps with HSE-compliant terminology, each with 3-4 hazards and matching controls
 - Reference specific HSE guidance numbers and regulations
 - Include competent person appointments per MHSWR regulation 7
 - Specify suitable PPE per Personal Protective Equipment Regulations 2002
@@ -202,7 +202,7 @@ METHODOLOGY:
 - Follow WorkSafe risk assessment framework
 
 DOCUMENTATION REQUIREMENTS:
-- Generate detailed job steps with WorkSafe terminology
+- Generate exactly 12-14 job steps with WorkSafe terminology, each with 3-4 hazards and matching controls
 - Reference specific HSWA sections and WorkSafe guidance
 - Include competent person requirements and worker participation
 - Specify appropriate PPE per WorkSafe standards
@@ -227,7 +227,7 @@ METHODOLOGY:
 - Ensure compliance with IIPP requirements (CCR Title 8, Section 3203)
 
 DOCUMENTATION REQUIREMENTS:
-- Generate detailed job steps meeting Cal/OSHA documentation standards
+- Generate exactly 12-14 job steps meeting Cal/OSHA documentation standards, each with 3-4 hazards and matching controls
 - Include specific CCR Title 8 citations in control measures
 - Assign qualified persons per Cal/OSHA definitions
 - Specify required PPE per Cal/OSHA standards
@@ -252,7 +252,7 @@ METHODOLOGY:
 - Ensure comprehensive hazard-to-control mapping
 
 DOCUMENTATION REQUIREMENTS:
-- Generate minimum 10 detailed job steps with thorough safety analysis
+- Generate exactly 12-14 detailed job steps, each with 3-4 hazards and matching controls
 - Include specific regulatory citations where applicable
 - Assign competent persons for high-risk activities
 - Specify appropriate PPE for identified hazards
@@ -277,7 +277,7 @@ METHODOLOGY:
 - Ensure detailed job safety analysis per EM 385-1-1 requirements
 
 DOCUMENTATION REQUIREMENTS:
-- Generate detailed job steps with comprehensive safety analysis
+- Generate exactly 12-14 job steps with comprehensive safety analysis, each with 3-4 hazards and matching controls
 - Include specific EM 385-1-1 section references in control measures
 - Assign competent persons per USACE definitions and requirements
 - Specify required PPE and training per EM 385-1-1 standards
