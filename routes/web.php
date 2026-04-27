@@ -80,6 +80,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/paypal/success/{document}', [\App\Http\Controllers\PayPalController::class, 'success'])->name('paypal.success');
 
 
+    // Paddle Routes
+    Route::get('/paddle/checkout/{document}', [\App\Http\Controllers\PaddleController::class, 'checkout'])->name('paddle.checkout');
+    Route::get('/paddle/review-checkout/{review}', [\App\Http\Controllers\PaddleController::class, 'reviewCheckout'])->name('paddle.review-checkout');
+
     // Test Checkout (local env only)
     Route::get('/test/checkout/{document}', function (\App\Models\SafetyDocument $document) {
         abort_unless(app()->isLocal(), 403);
@@ -119,6 +123,7 @@ Route::get('/review/secure/{token}', function ($token) {
 })->name('review.secure');
 
 Route::post('/stripe/webhook', [StripeController::class, 'webhook'])->name('stripe.webhook');
+Route::post('/paddle/webhook', [\App\Http\Controllers\PaddleController::class, 'webhook'])->name('paddle.webhook');
 Route::get('/env-check', function () {
     return [
         'APP_ENV' => env('APP_ENV'),
