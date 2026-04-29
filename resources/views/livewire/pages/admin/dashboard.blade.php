@@ -192,13 +192,15 @@ new #[Layout('layouts.safety')] class extends Component {
                     <div class="grid grid-cols-2 gap-2 sm:hidden">
                         <div class="flex flex-col gap-1">
                             <label class="text-[9px] font-black uppercase tracking-widest text-primary pl-1">Start Date</label>
-                            <input type="date" wire:model.live="fromDate"
+                            <input type="date" wire:model.live="fromDate" placeholder="MM/DD/YYYY"
                                 class="h-[46px] px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
+                            <span class="text-[8px] text-slate-400 font-bold pl-1 tracking-wide">MM / DD / YYYY</span>
                         </div>
                         <div class="flex flex-col gap-1">
                             <label class="text-[9px] font-black uppercase tracking-widest text-primary pl-1">End Date</label>
-                            <input type="date" wire:model.live="toDate"
+                            <input type="date" wire:model.live="toDate" placeholder="MM/DD/YYYY"
                                 class="h-[46px] px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
+                            <span class="text-[8px] text-slate-400 font-bold pl-1 tracking-wide">MM / DD / YYYY</span>
                         </div>
                     </div>
 
