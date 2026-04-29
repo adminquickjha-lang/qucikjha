@@ -1,189 +1,258 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>New Contact Form Message</title>
+    <title>New Contact Inquiry — QuickJHA</title>
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f8fafc;
-            margin: 0;
-            padding: 40px 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f1f5f9;
+            padding: 48px 20px;
+            -webkit-font-smoothing: antialiased;
         }
-
         .wrapper {
-            max-width: 600px;
+            max-width: 620px;
             margin: 0 auto;
-            background: #ffffff;
-            border-radius: 24px;
-            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
-            overflow: hidden;
-            border: 1px solid #f1f5f9;
         }
-
+        /* ── Header ── */
         .header {
-            background: #ffffff;
-            padding: 40px 48px 30px;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            border-radius: 16px 16px 0 0;
+            padding: 40px 48px;
             text-align: center;
-            border-bottom: 2px solid #f1f5f9;
         }
-
-        .logo {
-            max-height: 40px;
+        .header-logo {
+            height: 44px;
+            width: auto;
             margin-bottom: 24px;
         }
-
-        .header h1 {
-            color: #0f172a;
-            font-size: 24px;
+        .badge {
+            display: inline-block;
+            background: rgba(14, 165, 233, 0.15);
+            border: 1px solid rgba(14, 165, 233, 0.35);
+            color: #38bdf8;
+            font-size: 10px;
             font-weight: 800;
-            margin: 0;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            padding: 5px 14px;
+            border-radius: 999px;
+            margin-bottom: 16px;
+        }
+        .header h1 {
+            color: #f8fafc;
+            font-size: 26px;
+            font-weight: 800;
             letter-spacing: -0.5px;
-            line-height: 1.2;
+            line-height: 1.25;
+            margin-bottom: 8px;
         }
-
         .header p {
-            color: #64748b;
-            font-size: 15px;
-            margin: 8px 0 0;
+            color: #94a3b8;
+            font-size: 14px;
             font-weight: 500;
+            line-height: 1.6;
         }
-
+        /* ── Body ── */
         .body {
-            padding: 40px 48px;
             background: #ffffff;
+            padding: 40px 48px;
         }
-
-        .grid-fields {
+        /* ── Sender Cards ── */
+        .cards-row {
             display: table;
             width: 100%;
-            margin-bottom: 30px;
+            border-collapse: separate;
+            border-spacing: 12px 0;
+            margin: 0 -12px 32px;
         }
-
-        .field-group {
+        .card {
             display: table-cell;
             width: 50%;
-            padding-right: 20px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 18px 20px;
+            vertical-align: top;
         }
-
-        .field-label {
-            font-size: 11px;
+        .card-label {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+        .card-icon {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: #e0f2fe;
+            border-radius: 8px;
+            text-align: center;
+            line-height: 30px;
+            margin-bottom: 10px;
+        }
+        .card-value {
+            font-size: 15px;
+            color: #0f172a;
+            font-weight: 700;
+            line-height: 1.4;
+            word-break: break-all;
+        }
+        .card-value a {
+            color: #0284c7;
+            text-decoration: none;
+        }
+        /* ── Divider ── */
+        .divider {
+            border: none;
+            border-top: 1px solid #f1f5f9;
+            margin: 32px 0;
+        }
+        /* ── Subject ── */
+        .section-label {
+            font-size: 10px;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 0.15em;
             color: #94a3b8;
             margin-bottom: 8px;
         }
-
-        .field-value {
-            font-size: 15px;
+        .subject-text {
+            font-size: 20px;
+            font-weight: 800;
             color: #0f172a;
-            font-weight: 600;
-            line-height: 1.5;
-            word-break: break-all;
+            letter-spacing: -0.3px;
+            line-height: 1.3;
         }
-
-        .divider {
-            border: none;
-            border-top: 1px solid #f1f5f9;
-            margin: 30px 0;
+        /* ── Message Box ── */
+        .message-wrap {
+            margin-top: 28px;
         }
-
-        .message-container {
-            margin-top: 10px;
-        }
-
         .message-box {
             background: #f8fafc;
+            border: 1px solid #e2e8f0;
             border-left: 4px solid #0ea5e9;
             border-radius: 0 12px 12px 0;
-            padding: 24px;
-            margin-top: 12px;
+            padding: 24px 28px;
+            margin-top: 10px;
         }
-
         .message-box p {
             font-size: 15px;
             color: #334155;
-            line-height: 1.8;
-            margin: 0;
+            line-height: 1.85;
             white-space: pre-wrap;
         }
-
-        .footer {
-            background: #f8fafc;
-            padding: 30px 48px;
+        /* ── Reply CTA ── */
+        .cta-wrap {
             text-align: center;
+            margin-top: 36px;
+            padding-top: 32px;
             border-top: 1px solid #f1f5f9;
         }
-
-        .footer p {
-            font-size: 13px;
-            color: #94a3b8;
-            margin: 0;
-            font-weight: 500;
-        }
-
-        .tag {
+        .cta-btn {
             display: inline-block;
-            background: #e0f2fe;
-            color: #0284c7;
+            background: #0ea5e9;
+            color: #ffffff !important;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            padding: 14px 32px;
+            border-radius: 10px;
+        }
+        /* ── Footer ── */
+        .footer {
+            background: #0f172a;
+            border-radius: 0 0 16px 16px;
+            padding: 28px 48px;
+            text-align: center;
+        }
+        .footer-brand {
+            color: #f1f5f9;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+        .footer-meta {
+            color: #475569;
             font-size: 12px;
-            font-weight: 700;
-            padding: 4px 12px;
-            border-radius: 999px;
-            margin-bottom: 16px;
+            font-weight: 500;
+            line-height: 1.6;
+        }
+        .footer-divider {
+            border: none;
+            border-top: 1px solid #1e293b;
+            margin: 16px 0;
         }
     </style>
 </head>
-
 <body>
     <div class="wrapper">
+
+        {{-- Header --}}
         <div class="header">
-            @if(file_exists(public_path('logo.svg')))
-                <img src="{{ asset('logo.svg') }}" alt="QuickJHA Logo" class="logo">
-            @else
-                <h2 style="margin: 0 0 20px; color: #0ea5e9;">QuickJHA</h2>
-            @endif
-            <!-- <div class="tag">New Inquiry</div> -->
-            <h1>Contact Form Submission</h1>
-            <p>You've received a new message from the QuickJHA landing page.</p>
+            <img src="{{ asset('logo.jpg') }}" alt="QuickJHA" class="header-logo" />
+            <div class="badge">New Contact Inquiry</div>
+            <h1>You've Got a New Message</h1>
+            <p>Someone submitted the contact form on QuickJHA.<br>Details are below — reply directly to respond.</p>
         </div>
+
+        {{-- Body --}}
         <div class="body">
-            <div class="grid-fields">
-                <div class="field-group">
-                    <div class="field-label">Sender Name</div>
-                    <div class="field-value">{{ $formData['name'] }}</div>
+
+            {{-- Sender Info Cards --}}
+            <div class="cards-row">
+                <div class="card">
+                    <div class="card-label">From</div>
+                    <div class="card-value">{{ $formData['name'] }}</div>
                 </div>
-                <div class="field-group">
-                    <div class="field-label">Work Email</div>
-                    <div class="field-value">
-                        <a href="mailto:{{ $formData['email'] }}" style="color: #0ea5e9; text-decoration: none;">
-                            {{ $formData['email'] }}
-                        </a>
+                <div class="card">
+                    <div class="card-label">Email Address</div>
+                    <div class="card-value">
+                        <a href="mailto:{{ $formData['email'] }}">{{ $formData['email'] }}</a>
                     </div>
                 </div>
             </div>
 
-            <div class="divider"></div>
+            <hr class="divider">
 
-            <div class="message-container">
-                <div class="field-label">Subject</div>
-                <div class="field-value" style="font-size: 18px;">{{ $formData['subject'] }}</div>
+            {{-- Subject --}}
+            <div class="section-label">Subject</div>
+            <div class="subject-text">{{ $formData['subject'] }}</div>
 
-                <div style="margin-top: 24px;">
-                    <div class="field-label">Message Details</div>
-                    <div class="message-box">
-                        <p>{{ $formData['message'] }}</p>
-                    </div>
+            {{-- Message --}}
+            <div class="message-wrap">
+                <div class="section-label">Message</div>
+                <div class="message-box">
+                    <p>{{ $formData['message'] }}</p>
                 </div>
             </div>
+
+            {{-- Reply CTA --}}
+            <div class="cta-wrap">
+                <a href="mailto:{{ $formData['email'] }}?subject=Re: {{ $formData['subject'] }}" class="cta-btn">
+                    Reply to {{ $formData['name'] }}
+                </a>
+            </div>
+
         </div>
+
+        {{-- Footer --}}
         <div class="footer">
-            <p>This automated email was dispatched from QuickJHA · {{ now()->format('F jS, Y \a\t g:i A') }}</p>
+            <div class="footer-brand">QuickJHA</div>
+            <hr class="footer-divider">
+            <p class="footer-meta">
+                This message was sent via the QuickJHA contact form<br>
+                {{ now()->format('l, F jS Y \a\t g:i A T') }}
+            </p>
         </div>
+
     </div>
 </body>
-
 </html>

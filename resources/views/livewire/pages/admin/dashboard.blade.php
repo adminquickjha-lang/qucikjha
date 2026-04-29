@@ -87,7 +87,7 @@ new #[Layout('layouts.safety')] class extends Component {
                 style="display: none;">
 
                 <div class="p-2 space-y-1">
-                    <a href="{{ route('generate.jsa') }}"
+                    <a href="{{ route('generate.jsa') }}" wire:navigate
                         class="flex items-center gap-3 p-3 rounded-xl hover:bg-primary hover:text-white transition-all group">
                         <div
                             class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center group-hover:bg-white/20 group-hover:text-white">
@@ -101,7 +101,7 @@ new #[Layout('layouts.safety')] class extends Component {
                         <span class="text-[10px] font-black uppercase tracking-widest">Create JSA</span>
                     </a>
 
-                    <a href="{{ route('generate.jha') }}"
+                    <a href="{{ route('generate.jha') }}" wire:navigate
                         class="flex items-center gap-3 p-3 rounded-xl hover:bg-emerald-500 hover:text-white transition-all group">
                         <div
                             class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center group-hover:bg-white/20 group-hover:text-white">
@@ -114,7 +114,7 @@ new #[Layout('layouts.safety')] class extends Component {
                         <span class="text-[10px] font-black uppercase tracking-widest">Create JHA</span>
                     </a>
 
-                    <a href="{{ route('generate.aha') }}"
+                    <a href="{{ route('generate.aha') }}" wire:navigate
                         class="flex items-center gap-3 p-3 rounded-xl hover:bg-amber-500 hover:text-white transition-all group">
                         <div
                             class="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center group-hover:bg-white/20 group-hover:text-white">

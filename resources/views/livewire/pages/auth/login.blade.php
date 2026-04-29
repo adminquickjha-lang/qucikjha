@@ -124,15 +124,14 @@ new #[Layout('layouts.safety')] class extends Component {
 
                 <div class="pt-2">
                     <button type="submit"
-                        class="group relative overflow-hidden w-full h-12 bg-primary text-primary-foreground rounded-lg font-bold text-sm uppercase tracking-widest shadow-2xl shadow-primary/20 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-3">
+                        wire:loading.attr="disabled"
+                        class="group relative overflow-hidden w-full h-12 bg-primary text-primary-foreground rounded-lg font-bold text-sm uppercase tracking-widest shadow-2xl shadow-primary/20 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-80 disabled:cursor-not-allowed disabled:scale-100">
                         <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out z-0"></div>
-                        <span class="relative z-10 flex items-center justify-center gap-3">
+                        <span wire:loading.remove wire:target="login" class="relative z-10">
                             Sign In
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M5 12h14" />
-                                <path d="m12 5 7 7-7 7" />
-                            </svg>
+                        </span>
+                        <span wire:loading wire:target="login" style="display:none;" class="relative z-10">
+                            Signing in...
                         </span>
                     </button>
 
