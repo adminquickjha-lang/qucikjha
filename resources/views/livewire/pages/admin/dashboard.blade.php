@@ -188,17 +188,17 @@ new #[Layout('layouts.safety')] class extends Component {
                 <!-- Date Range Filter -->
                 <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
 
-                    {{-- Mobile: stacked full-width date inputs with labels --}}
-                    <div class="flex flex-col gap-2 sm:hidden w-full">
+                    {{-- Mobile: side-by-side date inputs with labels --}}
+                    <div class="grid grid-cols-2 gap-2 sm:hidden w-full">
                         <div class="flex flex-col gap-1">
                             <label class="text-[9px] font-black uppercase tracking-widest text-primary pl-1">From</label>
                             <input type="date" wire:model.live="fromDate"
-                                class="h-[48px] px-4 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
+                                class="h-[48px] px-2 bg-white border-2 border-slate-200 rounded-xl text-[11px] font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
                         </div>
                         <div class="flex flex-col gap-1">
                             <label class="text-[9px] font-black uppercase tracking-widest text-primary pl-1">To</label>
                             <input type="date" wire:model.live="toDate"
-                                class="h-[48px] px-4 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
+                                class="h-[48px] px-2 bg-white border-2 border-slate-200 rounded-xl text-[11px] font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
                         </div>
                     </div>
 
