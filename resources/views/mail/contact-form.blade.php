@@ -142,7 +142,7 @@
     <div class="wrapper">
         <div class="header">
             @if(file_exists(public_path('logo.svg')))
-                <img src="{{ $message->embed(public_path('logo.svg')) }}" alt="QuickJHA Logo" class="logo">
+                <img src="{{ asset('logo.svg') }}" alt="QuickJHA Logo" class="logo">
             @else
                 <h2 style="margin: 0 0 20px; color: #0ea5e9;">QuickJHA</h2>
             @endif

@@ -1,6 +1,6 @@
 <x-mail::message>
 <div align="center" style="margin-bottom: 30px;">
-<img src="{{ $message->embed(public_path('logo.jpg')) }}" alt="{{ config('app.name') }}" style="height: 100px; width: auto;">
+<img src="{{ asset('logo.jpg') }}" alt="{{ config('app.name') }}" style="height: 100px; width: auto;">
 </div>
 
 # New Professional Review Request
