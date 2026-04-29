@@ -18,7 +18,6 @@ new #[Layout('layouts.safety', ['seoKey' => 'home'])] class extends Component {
     public string $contactEmail = '';
     public string $contactSubject = '';
     public string $contactMessage = '';
-    public bool $messageSent = false;
 
     public function mount()
     {
@@ -55,7 +54,7 @@ new #[Layout('layouts.safety', ['seoKey' => 'home'])] class extends Component {
         defer(fn() => Mail::to(config('mail.from.address'))->send(new ContactFormMail($formData)));
 
         $this->reset('contactName', 'contactEmail', 'contactSubject', 'contactMessage');
-        $this->messageSent = true;
+        $this->dispatch('swal', ['title' => 'Message Sent!', 'text' => "Thank you! We'll get back to you shortly.", 'icon' => 'success']);
     }
 
     public function services()
@@ -837,37 +836,7 @@ new #[Layout('layouts.safety', ['seoKey' => 'home'])] class extends Component {
                 </div>
 
                 <div class="md:col-span-3 p-10 md:p-14 bg-white relative">
-                    <!-- Subtle background decoration -->
                     <div class="absolute top-0 right-0 w-64 h-64 bg-slate-50 rounded-bl-full -z-10"></div>
-                    
-                    {{-- Success Toast --}}
-                    @if($messageSent)
-                        <div
-                            x-data="{ show: true }"
-                            x-show="show"
-                            x-init="setTimeout(() => { show = false; $wire.set('messageSent', false); }, 5000)"
-                            x-transition:enter="transition ease-out duration-300"
-                            x-transition:enter-start="opacity-0 translate-y-4"
-                            x-transition:enter-end="opacity-100 translate-y-0"
-                            x-transition:leave="transition ease-in duration-300"
-                            x-transition:leave-start="opacity-100 translate-y-0"
-                            x-transition:leave-end="opacity-0 translate-y-4"
-                            class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-start gap-4 bg-white border border-green-100 rounded-2xl shadow-2xl shadow-green-500/10 p-5 w-full max-w-sm"
-                            role="alert"
-                            id="contact-toast"
-                        >
-                            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-bold text-slate-900">Message Sent!</p>
-                                <p class="text-xs text-slate-500 mt-0.5">Thank you! We'll get back to you shortly.</p>
-                            </div>
-                            <button @click="show = false; $wire.set('messageSent', false)" class="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                            </button>
-                        </div>
-                    @endif
 
                     <form class="space-y-8 relative z-10" wire:submit.prevent="sendMessage">
                         <div class="grid sm:grid-cols-2 gap-8">

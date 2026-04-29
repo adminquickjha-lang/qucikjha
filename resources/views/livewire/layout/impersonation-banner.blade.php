@@ -16,6 +16,7 @@ new class extends Component {
 
         if ($admin) {
             Auth::login($admin);
+            session()->flash('success', "Impersonation ended. You have returned to your admin account.");
             return redirect()->route('admin.users');
         }
 

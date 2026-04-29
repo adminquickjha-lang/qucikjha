@@ -177,7 +177,10 @@ new #[Layout('layouts.safety')] class extends Component {
             $this->showReviewModal = false;
             $this->dispatch('swal', ['title' => 'Document Improved!', 'text' => 'The changes have been applied to your safety document.', 'icon' => 'success']);
         } catch (\Exception $e) {
-            $this->dispatch('swal', ['title' => 'Review failed!', 'text' => $e->getMessage(), 'icon' => 'error']);
+            \Illuminate\Support\Facades\Log::error('Review failed: ' . $e->getMessage());
+            $knownMessages = ['Please try again with a more specific request.', 'Please try being more specific.'];
+            $text = in_array($e->getMessage(), $knownMessages) ? $e->getMessage() : 'Something went wrong. Please try again in a moment.';
+            $this->dispatch('swal', ['title' => 'Review failed!', 'text' => $text, 'icon' => 'error']);
         } finally {
             $this->isReviewing = false;
         }
@@ -201,7 +204,7 @@ new #[Layout('layouts.safety')] class extends Component {
 
         $this->activeReviewId = $review->id;
         $this->showProfessionalReviewModal = false;
-        
+
         return $this->handleProfessionalReviewPayment('paypal');
     }
 
@@ -706,7 +709,7 @@ on JHA. </p>
                                 @endif
                         </td>
                         @php 
-                            $initialRacRaw = $h['initial_rac'] ?? $h['rac'] ?? $h['risk'] ?? 'N/A';
+                                                                                                                                                    $initialRacRaw = $h['initial_rac'] ?? $h['rac'] ?? $h['risk'] ?? 'N/A';
                             $initialRac = is_array($initialRacRaw) ? ($initialRacRaw[0] ?? 'N/A') : $initialRacRaw;
                             $initialRacChar = strtoupper(substr((string) $initialRac, 0, 1));
                             $initialRacColor = $racColors[$initialRacChar] ?? '#9ca3af';
@@ -967,7 +970,7 @@ on JHA. </p>
                                 const calls = commit.calls || [];
                                 if (!calls.some(c => c.method === 'review')) return;
                                 self.startProgress();
-                                succeed(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
+                                succeed(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 100; setTimeout(() => { self.progress = 0; }, 800); });
                                 fail(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
                             });
                             this.$cleanup(cleanup);
@@ -996,13 +999,13 @@ on JHA. </p>
                     <div class="mb-6">
                         <img src="/logo.svg" alt="QuickJHA Logo" class="h-12 w-auto object-contain" />
                     </div>
-                    <h3 class="text-2xl font-black text-slate-900 uppercase tracking-tighter italic">Review Document</h3>
-                    <p class="text-slate-500 font-medium mt-2">Tell us exactly what you want to improve or add to your document. Remaining reviews: {{ 5 - $reviewCount }}</p>
+                    <h3 class="text-2xl font-black text-black-900 uppercase tracking-tighter italic">Review Document</h3>
+                    <p class="text-black-500 font-medium mt-2">Tell us exactly what you want to improve or add to your document. Remaining reviews: {{ 5 - $reviewCount }}</p>
                 </div>
 
                 <div class="space-y-6">
                     <div>
-                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Improvement Request</label>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-black-400 mb-2">Improvement Request</label>
                         <textarea wire:model="reviewRequest" 
                             class="w-full rounded-2xl bg-slate-50 border-0 ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 p-4 min-h-[150px] font-medium text-slate-900 placeholder:text-slate-300 transition-all"
                             placeholder="e.g., 'Add more detailed controls for working at heights' or 'Include specific safety regulations for electrical tools'"></textarea>
@@ -1020,7 +1023,7 @@ on JHA. </p>
                         </span>
                     </button>
 
-                    <p class="text-[10px] text-center text-slate-400 font-bold uppercase tracking-tight">
+                    <p class="text-[10px] text-center text-black-400 font-bold uppercase tracking-tight">
                         Note: This will replace your current analysis with the improved version.
                     </p>
                 </div>
@@ -1062,12 +1065,12 @@ on JHA. </p>
                         <img src="/logo.svg" alt="QuickJHA Logo" class="h-12 w-auto object-contain" />
                     </div>
                     <h3 class="text-2xl font-black text-slate-900 uppercase tracking-tighter italic">Professional Review</h3>
-                    <p class="text-slate-500 font-medium mt-2">Your document will be reviewed by our professional team for $5. Tell us what level of improvements you need.</p>
+                    <p class="text-black-500 font-medium mt-2">Your document will be reviewed by our professional team for $5. Tell us what level of improvements you need.</p>
                 </div>
 
                 <div class="space-y-6">
                     <div>
-                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Instructions</label>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-black-400 mb-2">Instructions</label>
                         <textarea wire:model="professionalReviewMessage" 
                             class="w-full rounded-2xl bg-slate-50 border-0 ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 p-4 min-h-[150px] font-medium text-slate-900 placeholder:text-slate-300 transition-all"
                             placeholder="e.g., 'Ensure all roof safety protocols are covered...'"></textarea>

@@ -65,85 +65,7 @@ new class extends Component {
                     </a>
                     <a href="{{ route('user.reviews') }}" wire:navigate
                         class="px-4 py-2 rounded-xl text-sm font-bold {{ request()->routeIs('user.reviews') ? 'text-primary bg-primary/5' : 'text-slate-600 hover:text-primary hover:bg-slate-50' }} transition-all">
-                        Professionals Reviews
-                    </a>
-                    <a href="/" wire:navigate
-                        class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:text-primary hover:bg-slate-50 transition-all">
-                        Home
-                    </a>
-                    <div class="relative group" x-data="{ open: false }" @mouseenter="open = true" @mouseleave="open = false">
-                        <button
-                            class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:text-primary hover:bg-slate-50 transition-all flex items-center gap-1">
-                            Services
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="2" class="transition-transform group-hover:rotate-180">
-                                <path d="m6 9 6 6 6-6" />
-                            </svg>
-                        </button>
-                        <div x-show="open" x-transition:enter="transition ease-out duration-200"
-                            x-transition:enter-start="opacity-0 translate-y-2"
-                            x-transition:enter-end="opacity-100 translate-y-0"
-                            class="absolute left-0 mt-0 w-72 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 z-50 overflow-hidden">
-                            <a href="{{ route('services.jha') }}" wire:navigate
-                                class="flex items-center gap-3 p-3 rounded-xl hover:bg-primary/5 group/link transition-all">
-                                <div
-                                    class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover/link:bg-primary group-hover/link:text-white transition-colors">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-                                        fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                        <line x1="12" x2="12" y1="8" y2="12" />
-                                        <line x1="12" x2="12.01" y1="16" y2="16" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-800">Job Hazard Analysis (JHA)</div>
-                                    <div class="text-[10px] text-slate-500 font-medium">OSHA Compliant Format</div>
-                                </div>
-                            </a>
-                            <a href="{{ route('services.aha') }}" wire:navigate
-                                class="flex items-center gap-3 p-3 rounded-xl hover:bg-primary/5 group/link transition-all">
-                                <div
-                                    class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover/link:bg-primary group-hover/link:text-white transition-colors">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-                                        fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                        <path d="m9 12 2 2 4-4" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-800">Activity Hazard Analysis (AHA)</div>
-                                    <div class="text-[10px] text-slate-500 font-medium">EM 385 Planning Format</div>
-                                </div>
-                            </a>
-                            <a href="{{ route('services.jsa') }}" wire:navigate
-                                class="flex items-center gap-3 p-3 rounded-xl hover:bg-primary/5 group/link transition-all">
-                                <div
-                                    class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover/link:bg-primary group-hover/link:text-white transition-colors">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-                                        fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                        <path d="M8 12h8" />
-                                        <path d="M8 16h5" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="text-sm font-bold text-slate-800">Job Safety Analysis (JSA)</div>
-                                    <div class="text-[10px] text-slate-500 font-medium">Daily Safe Work Format</div>
-                                </div>
-                            </a>
-                        </div>
-                    </div>
-                    <a href="{{ request()->is('/') ? '#about' : '/#about' }}" wire:navigate
-                        class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:text-primary hover:bg-slate-50 transition-all">
-                        About
-                    </a>
-                    <a href="{{ request()->is('/') ? '#faq' : '/#faq' }}" wire:navigate
-                        class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:text-primary hover:bg-slate-50 transition-all">
-                        FAQ
-                    </a>
-                    <a href="{{ request()->is('/') ? '#contact' : '/#contact' }}" wire:navigate
-                        class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:text-primary hover:bg-slate-50 transition-all">
-                        Contact
+                        Professional Reviews
                     </a>
                 @endif
             @else
@@ -213,15 +135,15 @@ new class extends Component {
                         </a>
                     </div>
                 </div>
-                <a href="{{ request()->is('/') ? '#about' : '/#about' }}" wire:navigate
+                <a href="{{ url('/') }}#about"
                     class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:text-primary hover:bg-slate-50 transition-all">
                     About
                 </a>
-                <a href="{{ request()->is('/') ? '#faq' : '/#faq' }}" wire:navigate
+                <a href="{{ url('/') }}#faq"
                     class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:text-primary hover:bg-slate-50 transition-all">
                     FAQ
                 </a>
-                <a href="{{ request()->is('/') ? '#contact' : '/#contact' }}" wire:navigate
+                <a href="{{ url('/') }}#contact"
                     class="px-4 py-2 rounded-xl text-sm font-bold text-slate-600 hover:text-primary hover:bg-slate-50 transition-all">
                     Contact
                 </a>
@@ -381,16 +303,18 @@ new class extends Component {
                         @endif
                     @endauth
 
-                    <a href="/" wire:navigate @click="mobileOpen = false"
-                        class="block px-4 py-3 rounded-xl text-[16px] font-bold {{ request()->is('/') ? 'text-primary bg-primary/5' : 'text-brand-dark hover:bg-gray-50' }}">Home</a>
-                    <a href="{{ request()->is('/') ? '#services' : '/#services' }}" wire:navigate @click="mobileOpen = false"
-                        class="block px-4 py-3 rounded-xl text-[16px] font-bold text-brand-dark hover:bg-gray-50">Services</a>
-                    <a href="{{ request()->is('/') ? '#about' : '/#about' }}" wire:navigate @click="mobileOpen = false"
-                        class="block px-4 py-3 rounded-xl text-[16px] font-bold text-brand-dark hover:bg-gray-50">About</a>
-                    <a href="{{ request()->is('/') ? '#faq' : '/#faq' }}" wire:navigate @click="mobileOpen = false"
-                        class="block px-4 py-3 rounded-xl text-[16px] font-bold text-brand-dark hover:bg-gray-50">FAQ</a>
-                    <a href="{{ request()->is('/') ? '#contact' : '/#contact' }}" wire:navigate @click="mobileOpen = false"
-                        class="block px-4 py-3 rounded-xl text-[16px] font-bold text-brand-dark hover:bg-gray-50">Contact</a>
+                    @guest
+                        <a href="/" wire:navigate @click="mobileOpen = false"
+                            class="block px-4 py-3 rounded-xl text-[16px] font-bold {{ request()->is('/') ? 'text-primary bg-primary/5' : 'text-brand-dark hover:bg-gray-50' }}">Home</a>
+                        <a href="{{ url('/') }}#services" @click="mobileOpen = false"
+                            class="block px-4 py-3 rounded-xl text-[16px] font-bold text-brand-dark hover:bg-gray-50">Services</a>
+                        <a href="{{ url('/') }}#about" @click="mobileOpen = false"
+                            class="block px-4 py-3 rounded-xl text-[16px] font-bold text-brand-dark hover:bg-gray-50">About</a>
+                        <a href="{{ url('/') }}#faq" @click="mobileOpen = false"
+                            class="block px-4 py-3 rounded-xl text-[16px] font-bold text-brand-dark hover:bg-gray-50">FAQ</a>
+                        <a href="{{ url('/') }}#contact" @click="mobileOpen = false"
+                            class="block px-4 py-3 rounded-xl text-[16px] font-bold text-brand-dark hover:bg-gray-50">Contact</a>
+                    @endguest
                 </div>
             </div>
 

@@ -260,8 +260,30 @@ new #[Layout('layouts.safety')] class extends Component {
                                     </a>
 
                                     @if($r->progress < 3)
-                                        <button wire:click="markAsCompleted({{ $r->id }})"
-                                            wire:confirm="Are you sure you want to mark this review as completed?"
+                                        <button 
+                                            x-on:click="
+                                                Swal.fire({
+                                                    title: 'Are you sure?',
+                                                    text: 'Are you sure you want to mark this review as completed?',
+                                                    icon: 'question',
+                                                    showCancelButton: true,
+                                                    confirmButtonColor: '#10b981',
+                                                    cancelButtonColor: '#64748b',
+                                                    confirmButtonText: 'Yes, Complete It!',
+                                                    cancelButtonText: 'Cancel',
+                                                    customClass: {
+                                                        popup: 'rounded-[2rem] border-none shadow-2xl p-8',
+                                                        title: 'text-2xl font-black tracking-tighter text-slate-900',
+                                                        htmlContainer: 'text-sm font-medium text-slate-500 mt-2',
+                                                        confirmButton: 'rounded-xl px-6 py-3 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20',
+                                                        cancelButton: 'rounded-xl px-6 py-3 text-[10px] font-black uppercase tracking-widest'
+                                                    }
+                                                }).then((result) => {
+                                                    if (result.isConfirmed) {
+                                                        $wire.markAsCompleted({{ $r->id }})
+                                                    }
+                                                })
+                                            "
                                             class="p-2 bg-emerald-100 text-emerald-600 hover:bg-emerald-500 hover:text-white rounded-lg transition-all shadow-sm"
                                             title="Mark as Completed">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
@@ -359,8 +381,30 @@ new #[Layout('layouts.safety')] class extends Component {
                                 </a>
 
                                 @if($r->progress < 3)
-                                    <button wire:click="markAsCompleted({{ $r->id }})"
-                                        wire:confirm="Are you sure you want to mark this review as completed?"
+                                    <button 
+                                        x-on:click="
+                                            Swal.fire({
+                                                title: 'Complete Review?',
+                                                text: 'Mark this review as completed?',
+                                                icon: 'question',
+                                                showCancelButton: true,
+                                                confirmButtonColor: '#10b981',
+                                                cancelButtonColor: '#64748b',
+                                                confirmButtonText: 'Yes, Done!',
+                                                cancelButtonText: 'No',
+                                                customClass: {
+                                                    popup: 'rounded-[2rem] border-none shadow-2xl p-6',
+                                                    title: 'text-xl font-black tracking-tighter text-slate-900',
+                                                    htmlContainer: 'text-xs font-medium text-slate-500 mt-2',
+                                                    confirmButton: 'rounded-xl px-5 py-2.5 text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20',
+                                                    cancelButton: 'rounded-xl px-5 py-2.5 text-[9px] font-black uppercase tracking-widest'
+                                                }
+                                            }).then((result) => {
+                                                if (result.isConfirmed) {
+                                                    $wire.markAsCompleted({{ $r->id }})
+                                                }
+                                            })
+                                        "
                                         class="p-2.5 bg-emerald-500 text-white hover:brightness-110 rounded-xl shadow-lg shadow-emerald-500/20 transition-all"
                                         title="Mark as Completed">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"

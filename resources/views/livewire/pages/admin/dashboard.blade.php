@@ -10,19 +10,50 @@ new #[Layout('layouts.safety')] class extends Component {
 
     public $fromDate;
     public $toDate;
+    public $search;
+    public $documentType = 'all';
+
+    public function updatingFromDate()
+    {
+        $this->resetPage();
+    }
+    public function updatingToDate()
+    {
+        $this->resetPage();
+    }
+    public function updatingSearch()
+    {
+        $this->resetPage();
+    }
+    public function updatingDocumentType()
+    {
+        $this->resetPage();
+    }
 
     public function projects()
     {
         return SafetyDocument::with('user')
             ->when($this->fromDate, fn($q) => $q->whereDate('created_at', '>=', $this->fromDate))
             ->when($this->toDate, fn($q) => $q->whereDate('created_at', '<=', $this->toDate))
+            ->when($this->documentType !== 'all', fn($q) => $q->where('document_type', $this->documentType))
+            ->when($this->search, function ($q) {
+                $q->where(function ($query) {
+                    $query->where('project_name', 'like', '%' . $this->search . '%')
+                        ->orWhere('company_name', 'like', '%' . $this->search . '%')
+                        ->orWhereHas('user', function ($u) {
+                            $u->where('email', 'like', '%' . $this->search . '%')
+                                ->orWhere('name', 'like', '%' . $this->search . '%');
+                        });
+                });
+            })
             ->latest()
             ->paginate(10);
     }
 
     public function resetFilters()
     {
-        $this->reset(['fromDate', 'toDate']);
+        $this->reset(['fromDate', 'toDate', 'search', 'documentType']);
+        $this->resetPage();
     }
 
     public function stats()
@@ -177,71 +208,81 @@ new #[Layout('layouts.safety')] class extends Component {
         @endforeach
     </div>
 
+    <!-- Premium Filter Header -->
+    <div
+        class="mb-8 flex flex-col lg:flex-row justify-between items-stretch lg:items-center bg-white p-3 rounded-[2rem] ring-1 ring-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] gap-3 bg-gradient-to-br from-white to-slate-50/50">
+        <div
+            class="flex-grow flex items-center gap-4 pl-4 bg-slate-100/50 rounded-2xl px-4 py-2 border border-slate-200/50 group focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+            <div class="text-slate-400 group-focus-within:text-primary transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.3-4.3" />
+                </svg>
+            </div>
+            <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search orders..."
+                class="w-full bg-transparent border-0 p-0 text-sm font-bold tracking-tight text-slate-900 placeholder:text-slate-400 focus:ring-0 outline-none md:hidden" />
+            <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search by project, company or user email..."
+                class="hidden md:block w-full bg-transparent border-0 p-0 text-sm font-bold tracking-tight text-slate-900 placeholder:text-slate-400 placeholder:font-medium focus:ring-0 outline-none" />
+        </div>
+
+        <div class="flex flex-col md:flex-row items-stretch md:items-center gap-4 md:gap-6 w-full lg:w-auto">
+            <div class="flex items-center gap-3 flex-grow md:flex-grow-0 h-[46px]">
+                <div class="relative group w-full md:min-w-[140px]">
+                    <select wire:model.live="documentType"
+                        class="w-full appearance-none bg-white border border-slate-200 rounded-xl px-4 py-2.5 pr-11 text-xs font-bold text-slate-700 shadow-sm transition-all duration-300 hover:border-primary/60 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary cursor-pointer h-[46px]">
+                        <option value="all">All Types</option>
+                        <option value="JSA">JSA</option>
+                        <option value="JHA">JHA</option>
+                        <option value="AHA">AHA</option>
+                    </select>
+                    <div
+                        class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400 group-hover:text-primary transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m6 9 6 6 6-6" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                class="flex items-center bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm focus-within:ring-4 focus-within:ring-primary/10 transition-all h-[46px] w-full md:w-auto">
+                <div class="relative group/date flex-grow md:flex-grow-0">
+                    <input type="date" wire:model.live="fromDate"
+                        class="bg-transparent border-0 text-[10px] font-black uppercase px-4 py-3 text-slate-900 focus:ring-0 outline-none w-full md:w-36 lg:w-40 cursor-pointer" />
+                    <span
+                        class="absolute -top-1.5 left-4 px-1 bg-white text-[7px] font-black text-primary uppercase tracking-widest leading-none z-10 pointer-events-none">From</span>
+                </div>
+                <div class="w-px h-6 bg-slate-200 flex-shrink-0"></div>
+                <div class="relative group/date flex-grow md:flex-grow-0">
+                    <input type="date" wire:model.live="toDate"
+                        class="bg-transparent border-0 text-[10px] font-black uppercase px-4 py-3 text-slate-900 focus:ring-0 outline-none w-full md:w-36 lg:w-40 cursor-pointer" />
+                    <span
+                        class="absolute -top-1.5 left-4 px-1 bg-white text-[7px] font-black text-primary uppercase tracking-widest leading-none z-10 pointer-events-none">To</span>
+                </div>
+            </div>
+
+            @if($fromDate || $toDate || $search || $documentType !== 'all')
+                <button wire:click="resetFilters"
+                    class="h-[46px] px-6 flex items-center justify-center gap-2 bg-slate-100 text-slate-600 border border-slate-200 rounded-2xl hover:bg-destructive hover:text-white transition-all shadow-sm font-black text-[10px] uppercase tracking-widest"
+                    title="Clear Filters">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                    </svg>
+                    Reset
+                </button>
+            @endif
+        </div>
+    </div>
+
     <div class="card-surface-xl bg-card border border-border/50 shadow-soft overflow-hidden">
-        <div class="p-8 border-b border-border/50 bg-secondary/10">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div>
-                    <h3 class="text-xl font-black tracking-tight">Recent Orders</h3>
-                    <p class="text-xs text-muted-foreground font-medium mt-1">Review all created safety documents.</p>
-                </div>
-
-                <!-- Date Range Filter -->
-                <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
-
-                    {{-- Mobile: side-by-side date inputs with labels --}}
-                    <div class="grid grid-cols-2 gap-2 sm:hidden w-full">
-                        <div class="flex flex-col gap-1">
-                            <label class="text-[9px] font-black uppercase tracking-widest text-primary pl-1">From</label>
-                            <input type="date" wire:model.live="fromDate"
-                                class="h-[48px] px-2 bg-white border-2 border-slate-200 rounded-xl text-[11px] font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <label class="text-[9px] font-black uppercase tracking-widest text-primary pl-1">To</label>
-                            <input type="date" wire:model.live="toDate"
-                                class="h-[48px] px-2 bg-white border-2 border-slate-200 rounded-xl text-[11px] font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
-                        </div>
-                    </div>
-
-                    {{-- Desktop: combined floating-label pill --}}
-                    <div class="hidden sm:flex items-center bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm focus-within:ring-4 focus-within:ring-primary/10 transition-all h-[46px]">
-                        <div class="relative">
-                            <input type="date" wire:model.live="fromDate"
-                                class="bg-transparent border-0 text-[10px] font-black uppercase px-4 py-3 text-slate-900 focus:ring-0 outline-none w-36 lg:w-40 cursor-pointer" />
-                            <span
-                                class="absolute -top-1.5 left-4 px-1 bg-white text-[7px] font-black text-primary uppercase tracking-widest leading-none z-10 pointer-events-none">From</span>
-                        </div>
-                        <div class="w-px h-6 bg-slate-200 flex-shrink-0"></div>
-                        <div class="relative">
-                            <input type="date" wire:model.live="toDate"
-                                class="bg-transparent border-0 text-[10px] font-black uppercase px-4 py-3 text-slate-900 focus:ring-0 outline-none w-36 lg:w-40 cursor-pointer" />
-                            <span
-                                class="absolute -top-1.5 left-4 px-1 bg-white text-[7px] font-black text-primary uppercase tracking-widest leading-none z-10 pointer-events-none">To</span>
-                        </div>
-                    </div>
-
-                    <div class="flex gap-3">
-                        <button wire:click="$refresh"
-                            class="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary text-primary-foreground h-[46px] px-6 rounded-2xl font-bold text-[11px] uppercase tracking-widest hover:brightness-110 active:scale-[0.98] transition-all shadow-md shadow-primary/20">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="11" cy="11" r="8" />
-                                <path d="m21 21-4.3-4.3" />
-                            </svg>
-                            Search
-                        </button>
-                        @if($fromDate || $toDate)
-                            <button wire:click="resetFilters"
-                                class="h-[46px] w-[46px] flex items-center justify-center bg-secondary text-muted-foreground border border-border/50 rounded-2xl hover:bg-destructive hover:text-white transition-all shadow-sm"
-                                title="Clear Filters">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                                    <path d="M3 3v5h5" />
-                                </svg>
-                            </button>
-                        @endif
-                    </div>
-                </div>
+        <div class="p-8 border-b border-border/50 bg-secondary/5">
+            <div>
+                <h3 class="text-xl font-black tracking-tight">Recent Orders</h3>
+                <p class="text-xs text-muted-foreground font-medium mt-1">Review all created safety documents.</p>
             </div>
         </div>
         <!-- Desktop Table View -->
@@ -316,8 +357,8 @@ new #[Layout('layouts.safety')] class extends Component {
                             </td>
                             <td class="px-8 py-6">
                                 <span
-                                    class="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border {{ $p->is_paid ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-amber-100 text-amber-700 border-amber-200' }}">
-                                    {{ $p->is_paid ? 'Paid' : 'Generated' }}
+                                    class="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border {{ $p->is_paid ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-amber-100 text-amber-700 border-amber-200' }}">
+                                    {{ $p->is_paid ? 'Paid' : 'Unpaid' }}
                                 </span>
                             </td>
                             <td class="px-8 py-6 text-right font-black text-sm">${{ $p->amount ?: '19.90' }}</td>
@@ -379,7 +420,7 @@ new #[Layout('layouts.safety')] class extends Component {
                                     class="text-[9px] font-black uppercase tracking-widest text-slate-500">{{ Str::limit($p->user?->name ?? 'Unknown', 15) }}</span>
                             </div>
                             <span
-                                class="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border {{ $p->is_paid ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100' }}">
+                                class="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border {{ $p->is_paid ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100' }}">
                                 {{ $p->is_paid ? 'Paid' : 'Unpaid' }}
                             </span>
                         </div>

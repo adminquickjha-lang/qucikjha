@@ -179,7 +179,10 @@ new #[Layout('layouts.safety')] class extends Component {
             $this->showReviewModal = false;
             $this->dispatch('swal', ['title' => 'Document Improved!', 'text' => 'The changes have been applied to your safety document.', 'icon' => 'success']);
         } catch (\Exception $e) {
-            $this->dispatch('swal', ['title' => 'Review failed!', 'text' => $e->getMessage(), 'icon' => 'error']);
+            \Illuminate\Support\Facades\Log::error('Review failed: ' . $e->getMessage());
+            $knownMessages = ['Please try again with a more specific request.', 'Please try being more specific.'];
+            $text = in_array($e->getMessage(), $knownMessages) ? $e->getMessage() : 'Something went wrong. Please try again in a moment.';
+            $this->dispatch('swal', ['title' => 'Review failed!', 'text' => $text, 'icon' => 'error']);
         } finally {
             $this->isReviewing = false;
         }
@@ -203,7 +206,7 @@ new #[Layout('layouts.safety')] class extends Component {
 
         $this->activeReviewId = $review->id;
         $this->showProfessionalReviewModal = false;
-        
+
         return $this->handleProfessionalReviewPayment('paypal');
     }
 
@@ -302,74 +305,140 @@ new #[Layout('layouts.safety')] class extends Component {
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 print:hidden">
         <div class="flex-1 min-w-0">
             <div class="flex items-center gap-3 mb-3">
-                <span class="bg-primary text-primary-foreground font-black px-3 py-1 rounded-full text-[9px] uppercase tracking-widest shadow-lg shadow-primary/20">
+                <span
+                    class="bg-primary text-primary-foreground font-black px-3 py-1 rounded-full text-[9px] uppercase tracking-widest shadow-lg shadow-primary/20">
                     {{ $project->document_type }}
                 </span>
-                <span class="px-3 py-1 rounded-full text-[9px] uppercase tracking-widest font-black flex items-center gap-2 {{ $paid ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-secondary text-black border border-border' }}">
+                <span
+                    class="px-3 py-1 rounded-full text-[9px] uppercase tracking-widest font-black flex items-center gap-2 {{ $paid ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-secondary text-black border border-border' }}">
                     @if($paid)
-                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 6 9 17l-5-5" />
+                        </svg>
                         Paid & Unlocked
                     @else
-                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
                         Preview Mode
                     @endif
                 </span>
             </div>
-            <h1 class="text-3xl md:text-4xl font-black tracking-tighter leading-tight break-all">{{ Str::limit($project->project_name, 150) }}</h1>
+            <h1 class="text-3xl md:text-4xl font-black tracking-tighter leading-tight break-all">
+                {{ Str::limit($project->project_name, 150) }}
+            </h1>
             <p class="text-xs font-medium text-black mt-2">Safety Analysis Report • Ref: #{{ substr($id, 0, 8) }}</p>
         </div>
-        
+
         <div class="flex flex-col gap-3 w-full sm:w-fit">
             @if($paid)
                 @if($isEditing)
                     <div class="flex flex-wrap gap-3 w-full">
-                        <button wire:click="save" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        <button wire:click="save"
+                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                                <polyline points="17 21 17 13 7 13 7 21" />
+                                <polyline points="7 3 7 8 15 8" />
+                            </svg>
                             Save
                         </button>
-                        <button wire:click="toggleEdit" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
+                        <button wire:click="toggleEdit"
+                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
                             Cancel
                         </button>
                     </div>
                 @else
                     <div class="flex flex-wrap gap-3 w-full">
-                        <a href="{{ route('document.pdf', ['id' => $id]) }}" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                        <a href="{{ route('document.pdf', ['id' => $id]) }}"
+                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" x2="12" y1="15" y2="3" />
+                            </svg>
                             PDF
                         </a>
-                        <button wire:click="exportWord" wire:loading.attr="disabled" wire:target="exportWord" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-50 whitespace-nowrap">
-                            <svg wire:loading.remove wire:target="exportWord" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                            <svg wire:loading wire:target="exportWord" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                        <button wire:click="exportWord" wire:loading.attr="disabled" wire:target="exportWord"
+                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-50 whitespace-nowrap">
+                            <svg wire:loading.remove wire:target="exportWord" xmlns="http://www.w3.org/2000/svg" width="18"
+                                height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                                <line x1="16" y1="13" x2="8" y2="13" />
+                                <line x1="16" y1="17" x2="8" y2="17" />
+                                <polyline points="10 9 9 9 8 9" />
+                            </svg>
+                            <svg wire:loading wire:target="exportWord" class="animate-spin" xmlns="http://www.w3.org/2000/svg"
+                                width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="2" x2="12" y2="6" />
+                                <line x1="12" y1="18" x2="12" y2="22" />
+                                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+                                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+                                <line x1="2" y1="12" x2="6" y2="12" />
+                                <line x1="18" y1="12" x2="22" y2="12" />
+                                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+                                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+                            </svg>
                             <span wire:loading.remove wire:target="exportWord">Word</span>
                             <span wire:loading wire:target="exportWord">Exporting...</span>
                         </button>
-                        <button wire:click="toggleEdit" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        <button wire:click="toggleEdit"
+                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
                             Edit
                         </button>
                     </div>
 
                     <div class="flex flex-wrap gap-3 w-full">
                         @if($reviewCount < 5)
-                            <button wire:click="$set('showReviewModal', true)" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            <button wire:click="$set('showReviewModal', true)"
+                                class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
                                 Review ({{ 5 - $reviewCount }})
                             </button>
                         @endif
 
-                        <button wire:click="$set('showProfessionalReviewModal', true)" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>
+                        <button wire:click="$set('showProfessionalReviewModal', true)"
+                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                                <circle cx="9" cy="7" r="4" />
+                                <path d="m16 11 2 2 4-4" />
+                            </svg>
                             Professional Review ($5)
                         </button>
                     </div>
                 @endif
             @else
-                <button wire:click="handlePayment('paypal')" class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                <button wire:click="handlePayment('paypal')"
+                    class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="20" height="14" x="2" y="5" rx="2" />
+                        <line x1="2" x2="22" y1="10" y2="10" />
+                    </svg>
                     Unlock Document — ${{ $this->price }}
                 </button>
                 @if(app()->isLocal())
-                    <a href="{{ route('test.checkout', $id) }}" class="text-xs text-amber-600 border border-amber-400 bg-amber-50 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-100 transition-colors">
+                    <a href="{{ route('test.checkout', $id) }}"
+                        class="text-xs text-amber-600 border border-amber-400 bg-amber-50 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-100 transition-colors">
                         ⚡ Test Unlock (local only)
                     </a>
                 @endif
@@ -378,13 +447,16 @@ new #[Layout('layouts.safety')] class extends Component {
     </div>
 
     <!-- Document Rendering Container -->
-        <div class="relative">
+    <div class="relative">
         @if(!$paid)
-            <div class="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none overflow-hidden print:hidden">
-                <div class="bg-foreground text-background px-12 py-5 rounded-3xl font-black shadow-2xl rotate-[-7deg] text-2xl tracking-[0.3em] uppercase opacity-90 scale-110">
+            <div
+                class="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none overflow-hidden print:hidden">
+                <div
+                    class="bg-foreground text-background px-12 py-5 rounded-3xl font-black shadow-2xl rotate-[-7deg] text-2xl tracking-[0.3em] uppercase opacity-90 scale-110">
                     Preview Only
                 </div>
-                <div class="absolute inset-0 grid grid-cols-2 md:grid-cols-4 gap-20 opacity-[0.03] select-none text-[80px] font-black -rotate-12 pointer-events-none">
+                <div
+                    class="absolute inset-0 grid grid-cols-2 md:grid-cols-4 gap-20 opacity-[0.03] select-none text-[80px] font-black -rotate-12 pointer-events-none">
                     @for($i = 0; $i < 20; $i++)
                         <span class="whitespace-nowrap italic">DRAFT ONLY • PREVIEW ONLY</span>
                     @endfor
@@ -400,286 +472,331 @@ new #[Layout('layouts.safety')] class extends Component {
             $jsaTableHeaderColor = \App\Models\Setting::where('key', 'jsa_table_header_color')->value('value') ?? \App\Models\Setting::where('key', 'table_header_color')->value('value') ?? '#2c5f9e';
         @endphp
 
-        <div class="bg-white ring-1 ring-border shadow-2xl overflow-x-auto font-['Arial',sans-serif] text-sm print:shadow-none p-4 md:p-8">
+        <div
+            class="bg-white ring-1 ring-border shadow-2xl overflow-x-auto font-['Arial',sans-serif] text-sm print:shadow-none p-4 md:p-8">
             <div class="min-w-[900px]">
-            {{-- Logo Section --}}
-            @php
-                $logoSrc = '';
-                $customLogoPath = $project->logo_path;
+                {{-- Logo Section --}}
+                @php
+                    $logoSrc = '';
+                    $customLogoPath = $project->logo_path;
 
-                if ($customLogoPath && \Storage::disk('public')->exists($customLogoPath)) {
-                    $fullPath = \Storage::disk('public')->path($customLogoPath);
-                    $logoData = base64_encode(file_get_contents($fullPath));
-                    $logoMime = mime_content_type($fullPath);
-                    $logoSrc = 'data:' . $logoMime . ';base64,' . $logoData;
-                } else {
-                    $fallbackLogo = public_path('logo.svg');
-                    if (file_exists($fallbackLogo)) {
-                        $logoData = base64_encode(file_get_contents($fallbackLogo));
-                        $logoMime = mime_content_type($fallbackLogo);
+                    if ($customLogoPath && \Storage::disk('public')->exists($customLogoPath)) {
+                        $fullPath = \Storage::disk('public')->path($customLogoPath);
+                        $logoData = base64_encode(file_get_contents($fullPath));
+                        $logoMime = mime_content_type($fullPath);
                         $logoSrc = 'data:' . $logoMime . ';base64,' . $logoData;
+                    } else {
+                        $fallbackLogo = public_path('logo.svg');
+                        if (file_exists($fallbackLogo)) {
+                            $logoData = base64_encode(file_get_contents($fallbackLogo));
+                            $logoMime = mime_content_type($fallbackLogo);
+                            $logoSrc = 'data:' . $logoMime . ';base64,' . $logoData;
+                        }
                     }
-                }
-            @endphp
-            @if($logoSrc)
-                <div class="text-center mb-4">
-                    <img src="{{ $logoSrc }}" 
-                         alt="Company Logo" 
-                         class="max-h-32 mx-auto object-contain" />
-                </div>
-            @endif
+                @endphp
+                @if($logoSrc)
+                    <div class="text-center mb-4">
+                        <img src="{{ $logoSrc }}" alt="Company Logo" class="max-h-32 mx-auto object-contain" />
+                    </div>
+                @endif
 
-            {{-- Title Section --}}
-            <div class="text-left mb-6">
-                <h1 class="text-[28px] font-bold uppercase">Job Safety Analysis (JSA)</h1>
-            </div>
+                {{-- Title Section --}}
+                <div class="text-left mb-6">
+                    <h1 class="text-[28px] font-bold uppercase">Job Safety Analysis (JSA)</h1>
+                </div>
 
-            {{-- Info Table --}}
-            <div class="grid grid-cols-3 border border-black mb-6">
-                <div class="col-span-2 border-r border-b border-black p-2">
-                    <span class="text-[12px] font-bold block uppercase">Activity/Task:</span>
-                    @if($isEditing)
-                        <input type="text" wire:model="projectName" class="w-full border-0 p-0 focus:ring-0 text-[14px]">
-                    @else
-                        <span class="text-[14px] break-all overflow-wrap-anywhere">{{ Str::limit($projectName, 100) }}</span>
-                    @endif
-                </div>
-                <div class="border-b border-black p-2">
-                    <span class="text-[12px] font-bold block uppercase">Date:</span>
-                    <span class="text-[14px]">{{ optional($project->created_at)->format('m/d/Y') }}</span>
-                </div>
-                <div class="border-r border-b border-black p-2">
-                    <span class="text-[12px] font-bold block uppercase">Developed by:</span>
-                    @if($isEditing)
-                        <input type="text" wire:model="preparedBy" class="w-full border-0 p-0 focus:ring-0 text-[14px]">
-                    @else
-                        <span class="text-[14px] break-all overflow-wrap-anywhere">{{ Str::limit($preparedBy, 100) }}</span>
-                    @endif
-                </div>
-                <div class="border-r border-b border-black p-2">
-                    <span class="text-[12px] font-bold block uppercase">Competent Person:</span>
-                    @if($isEditing)
-                        <input type="text" wire:model="competentPerson" class="w-full border-0 p-0 focus:ring-0 text-[14px]">
-                    @else
-                        <span class="text-[14px]">{{ Str::limit($competentPerson ?? 'N/A', 100) }}</span>
-                    @endif
-                </div>
-                <div class="border-b border-black p-2">
-                    <span class="text-[12px] font-bold block uppercase">Company:</span>
-                    @if($isEditing)
-                        <input type="text" wire:model="companyName" class="w-full border-0 p-0 focus:ring-0 text-[14px]">
-                    @else
-                        <span class="text-[14px]">{{ Str::limit($companyName, 100) }}</span>
-                    @endif
-                </div>
-                <div class="border-r border-b border-black p-2">
-                    <span class="text-[12px] font-bold block uppercase">Location:</span>
-                    @if($isEditing)
-                        <input type="text" wire:model="projectLocation" class="w-full border-0 p-0 focus:ring-0 text-[14px]">
-                    @else
-                        <span class="text-[14px]">{{ Str::limit($projectLocation, 100) }}</span>
-                    @endif
-                </div>
-                <div class="col-span-2 border-b border-black p-2">
-                    <span class="text-[12px] font-bold block uppercase">Required Equipment:</span>
-                    @if($isEditing)
-                        <textarea wire:model="equipmentTools" class="w-full border-0 p-0 focus:ring-0 text-[14px] resize-none" rows="3"></textarea>
-                    @else
-                        <div class="text-[14px] line-clamp-3" title="{{ $equipmentTools }}">{{ Str::limit($equipmentTools, 319) }}</div>
-                    @endif
-                </div>
-                <div class="col-span-3 p-2">
-                    <span class="text-[12px] font-bold block uppercase mb-1">Required Documentation:</span>
-                    <div class="flex items-center gap-6">
-                        <div class="flex items-center gap-2">
-                            <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer" @if($isEditing) wire:click="$set('docs.hot_work_permit', !{{ ($docs['hot_work_permit'] ?? false) ? 'true' : 'false' }})" @endif>{!! ($docs['hot_work_permit'] ?? false) ? '&#10003;' : '' !!}</span>
-                            <span class="text-[12px]">Hot Work Permit</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer" @if($isEditing) wire:click="$set('docs.confined_space_permit', !{{ ($docs['confined_space_permit'] ?? false) ? 'true' : 'false' }})" @endif>{!! ($docs['confined_space_permit'] ?? false) ? '&#10003;' : '' !!}</span>
-                            <span class="text-[12px]">Confined Space Permit</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer" @if($isEditing) wire:click="$set('docs.mewp_permit', !{{ ($docs['mewp_permit'] ?? false) ? 'true' : 'false' }})" @endif>{!! ($docs['mewp_permit'] ?? false) ? '&#10003;' : '' !!}</span>
-                            <span class="text-[12px]">MEWP Permit</span>
+                {{-- Info Table --}}
+                <div class="grid grid-cols-3 border border-black mb-6">
+                    <div class="col-span-2 border-r border-b border-black p-2">
+                        <span class="text-[12px] font-bold block uppercase">Activity/Task:</span>
+                        @if($isEditing)
+                            <input type="text" wire:model="projectName"
+                                class="w-full border-0 p-0 focus:ring-0 text-[14px]">
+                        @else
+                            <span
+                                class="text-[14px] break-all overflow-wrap-anywhere">{{ Str::limit($projectName, 100) }}</span>
+                        @endif
+                    </div>
+                    <div class="border-b border-black p-2">
+                        <span class="text-[12px] font-bold block uppercase">Date:</span>
+                        <span class="text-[14px]">{{ optional($project->created_at)->format('m/d/Y') }}</span>
+                    </div>
+                    <div class="border-r border-b border-black p-2">
+                        <span class="text-[12px] font-bold block uppercase">Developed by:</span>
+                        @if($isEditing)
+                            <input type="text" wire:model="preparedBy" class="w-full border-0 p-0 focus:ring-0 text-[14px]">
+                        @else
+                            <span
+                                class="text-[14px] break-all overflow-wrap-anywhere">{{ Str::limit($preparedBy, 100) }}</span>
+                        @endif
+                    </div>
+                    <div class="border-r border-b border-black p-2">
+                        <span class="text-[12px] font-bold block uppercase">Competent Person:</span>
+                        @if($isEditing)
+                            <input type="text" wire:model="competentPerson"
+                                class="w-full border-0 p-0 focus:ring-0 text-[14px]">
+                        @else
+                            <span class="text-[14px]">{{ Str::limit($competentPerson ?? 'N/A', 100) }}</span>
+                        @endif
+                    </div>
+                    <div class="border-b border-black p-2">
+                        <span class="text-[12px] font-bold block uppercase">Company:</span>
+                        @if($isEditing)
+                            <input type="text" wire:model="companyName"
+                                class="w-full border-0 p-0 focus:ring-0 text-[14px]">
+                        @else
+                            <span class="text-[14px]">{{ Str::limit($companyName, 100) }}</span>
+                        @endif
+                    </div>
+                    <div class="border-r border-b border-black p-2">
+                        <span class="text-[12px] font-bold block uppercase">Location:</span>
+                        @if($isEditing)
+                            <input type="text" wire:model="projectLocation"
+                                class="w-full border-0 p-0 focus:ring-0 text-[14px]">
+                        @else
+                            <span class="text-[14px]">{{ Str::limit($projectLocation, 100) }}</span>
+                        @endif
+                    </div>
+                    <div class="col-span-2 border-b border-black p-2">
+                        <span class="text-[12px] font-bold block uppercase">Required Equipment:</span>
+                        @if($isEditing)
+                            <textarea wire:model="equipmentTools"
+                                class="w-full border-0 p-0 focus:ring-0 text-[14px] resize-none" rows="3"></textarea>
+                        @else
+                            <div class="text-[14px] line-clamp-3" title="{{ $equipmentTools }}">
+                                {{ Str::limit($equipmentTools, 319) }}
+                            </div>
+                        @endif
+                    </div>
+                    <div class="col-span-3 p-2">
+                        <span class="text-[12px] font-bold block uppercase mb-1">Required Documentation:</span>
+                        <div class="flex items-center gap-6">
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer"
+                                    @if($isEditing)
+                                        wire:click="$set('docs.hot_work_permit', !{{ ($docs['hot_work_permit'] ?? false) ? 'true' : 'false' }})"
+                                    @endif>{!! ($docs['hot_work_permit'] ?? false) ? '&#10003;' : '' !!}</span>
+                                <span class="text-[12px]">Hot Work Permit</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer"
+                                    @if($isEditing)
+                                        wire:click="$set('docs.confined_space_permit', !{{ ($docs['confined_space_permit'] ?? false) ? 'true' : 'false' }})"
+                                    @endif>{!! ($docs['confined_space_permit'] ?? false) ? '&#10003;' : '' !!}</span>
+                                <span class="text-[12px]">Confined Space Permit</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer"
+                                    @if($isEditing)
+                                        wire:click="$set('docs.mewp_permit', !{{ ($docs['mewp_permit'] ?? false) ? 'true' : 'false' }})"
+                                    @endif>{!! ($docs['mewp_permit'] ?? false) ? '&#10003;' : '' !!}</span>
+                                <span class="text-[12px]">MEWP Permit</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {{-- PPE Section --}}
-            <div class="border border-black mb-6">
-                <div class="bg-white border-b border-black p-1 text-center font-bold uppercase text-[14px]">
-                    Required Personal Protective Equipment for Entire Job
+                {{-- PPE Section --}}
+                <div class="border border-black mb-6">
+                    <div class="bg-white border-b border-black p-1 text-center font-bold uppercase text-[14px]">
+                        Required Personal Protective Equipment for Entire Job
+                    </div>
+                    <div class="p-4 grid grid-cols-4 gap-y-2 gap-x-4">
+                        @php
+                            $ppeItems = [
+                                'safety_glasses' => 'safety glasses',
+                                'face_shield' => 'face shield (+ glasses/goggles)',
+                                'nitrile_gloves' => 'nitrile/chem resistant',
+                                'respiratory_protection' => 'respiratory protection',
+                                'safety_shoes' => 'safety shoes',
+                                'chemical_goggles' => 'chemical goggles',
+                                'cut_resistant_gloves' => 'cut resistant gloves',
+                                'hearing_protection' => 'hearing protection',
+                                'welding_helmet' => 'welding goggles / helmet',
+                                'abrasion_resistant_gloves' => 'abrasion resistant',
+                                'hard_hat' => 'hard hat',
+                                'fall_protection' => 'fall protection harness/lanyard',
+                                'leather_gloves' => 'leather gloves'
+                            ];
+                        @endphp
+                        @foreach($ppeItems as $key => $label)
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer"
+                                    @if($isEditing)
+                                        wire:click="$set('ppe.{{ $key }}', !{{ ($ppe[$key] ?? false) ? 'true' : 'false' }})"
+                                    @endif>{!! ($ppe[$key] ?? false) ? '&#10003;' : '' !!}</span>
+                                <span class="text-[12px]">{{ $label }}</span>
+                            </div>
+                        @endforeach
+                        @foreach($jsa['ppe_others'] ?? [] as $other)
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none">&#10003;</span>
+                                <span class="text-[12px]">{{ $other }}</span>
+                            </div>
+                        @endforeach
+                    </div>
                 </div>
-                <div class="p-4 grid grid-cols-4 gap-y-2 gap-x-4">
-                    @php
-                        $ppeItems = [
-                            'safety_glasses' => 'safety glasses',
-                            'face_shield' => 'face shield (+ glasses/goggles)',
-                            'nitrile_gloves' => 'nitrile/chem resistant',
-                            'respiratory_protection' => 'respiratory protection',
-                            'safety_shoes' => 'safety shoes',
-                            'chemical_goggles' => 'chemical goggles',
-                            'cut_resistant_gloves' => 'cut resistant gloves',
-                            'hearing_protection' => 'hearing protection',
-                            'welding_helmet' => 'welding goggles / helmet',
-                            'abrasion_resistant_gloves' => 'abrasion resistant',
-                            'hard_hat' => 'hard hat',
-                            'fall_protection' => 'fall protection harness/lanyard',
-                            'leather_gloves' => 'leather gloves'
-                        ];
-                    @endphp
-                    @foreach($ppeItems as $key => $label)
-                        <div class="flex items-center gap-2">
-                            <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer" @if($isEditing) wire:click="$set('ppe.{{ $key }}', !{{ ($ppe[$key] ?? false) ? 'true' : 'false' }})" @endif>{!! ($ppe[$key] ?? false) ? '&#10003;' : '' !!}</span>
-                            <span class="text-[12px]">{{ $label }}</span>
-                        </div>
-                    @endforeach
-                    @foreach($jsa['ppe_others'] ?? [] as $other)
-                        <div class="flex items-center gap-2">
-                            <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none">&#10003;</span>
-                            <span class="text-[12px]">{{ $other }}</span>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
 
-            {{-- Task Table --}}
-            <table class="w-full border-collapse border border-black">
-                <thead>
-                    <tr class="text-white uppercase text-[14px] font-bold tracking-widest" style="background-color: {{ $jsaTableHeaderColor }}">
-                        <th class="border border-black p-3 w-[25%] font-black">Job Steps</th>
-                        <th class="border border-black p-3 w-[30%] font-black">Potential Hazards</th>
-                        <th class="border border-black p-3 w-[30%] font-black">Controls</th>
-                        <th class="border border-black p-3 w-[15%] font-black">Responsibility</th>
-                    </tr>
-                </thead>
-                <tbody class="text-[14px]">
-                    @foreach($steps as $i => $step)
-                        <tr wire:key="step-{{ $i }}">
-                            <td class="border border-black p-4 font-bold align-top">
-                                {{ $i + 1 }}. 
-                                @if($isEditing)
-                                    <textarea wire:model="steps.{{ $i }}.step_description" class="w-full border-0 p-0 focus:ring-0 font-bold bg-transparent resize-none" rows="3"></textarea>
-                                @else
-                                    {{ preg_replace('/^(?:Step\s*\d+[\.\:\-\s]*|\d+[\.\-\s]+)+/i', '', $step['step_description'] ?? $step['step'] ?? '') }}
-                                @endif
-                            </td>
-                            <td class="border border-black p-4 align-top">
-                                @if($isEditing)
-                                    @if(is_array($step['hazards']))
-                                        <ol class="list-decimal ml-6 space-y-2">
-                                            @foreach($step['hazards'] as $hj => $hazard)
-                                                <li>
-                                                    <input type="text" wire:model="steps.{{ $i }}.hazards.{{ $hj }}" class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
-                                                </li>
-                                            @endforeach
-                                        </ol>
-                                    @else
-                                        <textarea wire:model="steps.{{ $i }}.hazards" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
-                                    @endif
-                                @else
-                                    @if(is_array($step['hazards']))
-                                        <ol class="list-decimal ml-5 space-y-1">
-                                            @foreach($step['hazards'] as $h)
-                                                <li>{{ $h }}</li>
-                                            @endforeach
-                                        </ol>
-                                    @else
-                                        {{ $step['hazards'] }}
-                                    @endif
-                                @endif
-                            </td>
-                            <td class="border border-black p-4 align-top">
-                                @if($isEditing)
-                                    @if(is_array($step['controls']))
-                                        <ol class="list-decimal ml-6 space-y-2">
-                                            @foreach($step['controls'] as $hc => $control)
-                                                <li>
-                                                    <input type="text" wire:model="steps.{{ $i }}.controls.{{ $hc }}" class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
-                                                </li>
-                                            @endforeach
-                                        </ol>
-                                    @else
-                                        <textarea wire:model="steps.{{ $i }}.controls" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
-                                    @endif
-                                @else
-                                    @if(is_array($step['controls']))
-                                        <ol class="list-decimal ml-5 space-y-1">
-                                            @foreach($step['controls'] as $c)
-                                                <li>{{ $c }}</li>
-                                            @endforeach
-                                        </ol>
-                                    @else
-                                        {{ $step['controls'] }}
-                                    @endif
-                                @endif
-                            </td>
-                            <td class="border border-black p-4 align-top">
-                                @if($isEditing)
-                                    @php $resp = $step['responsibilities'] ?? $step['responsibility'] ?? ['Site Supervisor']; @endphp
-                                    @if(is_array($resp))
-                                        <ol class="list-decimal ml-6 space-y-2">
-                                            @foreach($resp as $hr => $r)
-                                                <li>
-                                                    <input type="text" wire:model="steps.{{ $i }}.responsibilities.{{ $hr }}" class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
-                                                </li>
-                                            @endforeach
-                                        </ol>
-                                    @else
-                                        <textarea wire:model="steps.{{ $i }}.responsibilities" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="2"></textarea>
-                                    @endif
-                                @else
-                                    @if(is_array($step['responsibilities'] ?? $step['responsibility'] ?? ['Site Supervisor']))
-                                        <ol class="list-decimal ml-5 space-y-1">
-                                            @foreach($step['responsibilities'] ?? $step['responsibility'] ?? ['Site Supervisor'] as $r)
-                                                <li>{{ $r }}</li>
-                                            @endforeach
-                                        </ol>
-                                    @else
-                                        {{ $step['responsibilities'] ?? $step['responsibility'] ?? 'Site Supervisor' }}
-                                    @endif
-                                @endif
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-
-            {{-- Toolbox Talk Section --}}
-            <div class="mt-16 page-break-before">
-                <div style="background-color: {{ $headerColor ?? \App\Models\Setting::where('key', 'header_color')->value('value') ?? '#1a3a6b' }}; color: #fff; font-weight: bold; font-size: 14px; padding: 12px; text-align: center; text-transform: uppercase; margin-bottom: 0;">
-                    TOOLBOX MEETING<br>
-                    <span style="font-size: 12px; font-weight: normal; text-transform: none;">(This JSA has been discussed with the following crew)</span>
-                </div>
+                {{-- Task Table --}}
                 <table class="w-full border-collapse border border-black">
                     <thead>
-                        <tr class="text-white text-[14px] uppercase" style="background-color: {{ $jsaTableHeaderColor }}">
-                            <th class="border border-black p-3 w-[50px] text-center">No.</th>
-                            <th class="border border-black p-3 w-[250px]">Name (Print)</th>
-                            <th class="border border-black p-3">Designation/Role</th>
-                            <th class="border border-black p-3 w-[150px]">Signature</th>
-                            <th class="border border-black p-3 w-[100px]">Date</th>
+                        <tr class="text-white uppercase text-[14px] font-bold tracking-widest"
+                            style="background-color: {{ $jsaTableHeaderColor }}">
+                            <th class="border border-black p-3 w-[25%] font-black">Job Steps</th>
+                            <th class="border border-black p-3 w-[30%] font-black">Potential Hazards</th>
+                            <th class="border border-black p-3 w-[30%] font-black">Controls</th>
+                            <th class="border border-black p-3 w-[15%] font-black">Responsibility</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @for($i = 1; $i <= 10; $i++)
-                            <tr>
-                                <td class="border border-black p-3 h-[35px] text-[12px] text-center font-bold">{{ $i }}.</td>
-                                <td class="border border-black p-3 h-[35px] text-[12px]">&nbsp;</td>
-                                <td class="border border-black p-3 h-[35px] text-[12px]">&nbsp;</td>
-                                <td class="border border-black p-3 h-[35px] text-[12px]">&nbsp;</td>
-                                <td class="border border-black p-3 h-[35px] text-[12px]">&nbsp;</td>
+                    <tbody class="text-[14px]">
+                        @foreach($steps as $i => $step)
+                            <tr wire:key="step-{{ $i }}">
+                                <td class="border border-black p-4 font-bold align-top">
+                                    {{ $i + 1 }}.
+                                    @if($isEditing)
+                                        <textarea wire:model="steps.{{ $i }}.step_description"
+                                            class="w-full border-0 p-0 focus:ring-0 font-bold bg-transparent resize-none"
+                                            rows="3"></textarea>
+                                    @else
+                                        {{ preg_replace('/^(?:Step\s*\d+[\.\:\-\s]*|\d+[\.\-\s]+)+/i', '', $step['step_description'] ?? $step['step'] ?? '') }}
+                                    @endif
+                                </td>
+                                <td class="border border-black p-4 align-top">
+                                    @if($isEditing)
+                                        @if(is_array($step['hazards']))
+                                            <ol class="list-decimal ml-6 space-y-2">
+                                                @foreach($step['hazards'] as $hj => $hazard)
+                                                    <li>
+                                                        <input type="text" wire:model="steps.{{ $i }}.hazards.{{ $hj }}"
+                                                            class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                    </li>
+                                                @endforeach
+                                            </ol>
+                                        @else
+                                            <textarea wire:model="steps.{{ $i }}.hazards"
+                                                class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none"
+                                                rows="3"></textarea>
+                                        @endif
+                                    @else
+                                        @if(is_array($step['hazards']))
+                                            <ol class="list-decimal ml-5 space-y-1">
+                                                @foreach($step['hazards'] as $h)
+                                                    <li>{{ $h }}</li>
+                                                @endforeach
+                                            </ol>
+                                        @else
+                                            {{ $step['hazards'] }}
+                                        @endif
+                                    @endif
+                                </td>
+                                <td class="border border-black p-4 align-top">
+                                    @if($isEditing)
+                                        @if(is_array($step['controls']))
+                                            <ol class="list-decimal ml-6 space-y-2">
+                                                @foreach($step['controls'] as $hc => $control)
+                                                    <li>
+                                                        <input type="text" wire:model="steps.{{ $i }}.controls.{{ $hc }}"
+                                                            class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                    </li>
+                                                @endforeach
+                                            </ol>
+                                        @else
+                                            <textarea wire:model="steps.{{ $i }}.controls"
+                                                class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none"
+                                                rows="3"></textarea>
+                                        @endif
+                                    @else
+                                        @if(is_array($step['controls']))
+                                            <ol class="list-decimal ml-5 space-y-1">
+                                                @foreach($step['controls'] as $c)
+                                                    <li>{{ $c }}</li>
+                                                @endforeach
+                                            </ol>
+                                        @else
+                                            {{ $step['controls'] }}
+                                        @endif
+                                    @endif
+                                </td>
+                                <td class="border border-black p-4 align-top">
+                                    @if($isEditing)
+                                        @php $resp = $step['responsibilities'] ?? $step['responsibility'] ?? ['Site Supervisor']; @endphp
+                                        @if(is_array($resp))
+                                            <ol class="list-decimal ml-6 space-y-2">
+                                                @foreach($resp as $hr => $r)
+                                                    <li>
+                                                        <input type="text" wire:model="steps.{{ $i }}.responsibilities.{{ $hr }}"
+                                                            class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                    </li>
+                                                @endforeach
+                                            </ol>
+                                        @else
+                                            <textarea wire:model="steps.{{ $i }}.responsibilities"
+                                                class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none"
+                                                rows="2"></textarea>
+                                        @endif
+                                    @else
+                                        @if(is_array($step['responsibilities'] ?? $step['responsibility'] ?? ['Site Supervisor']))
+                                            <ol class="list-decimal ml-5 space-y-1">
+                                                @foreach($step['responsibilities'] ?? $step['responsibility'] ?? ['Site Supervisor'] as $r)
+                                                    <li>{{ $r }}</li>
+                                                @endforeach
+                                            </ol>
+                                        @else
+                                            {{ $step['responsibilities'] ?? $step['responsibility'] ?? 'Site Supervisor' }}
+                                        @endif
+                                    @endif
+                                </td>
                             </tr>
-                        @endfor
+                        @endforeach
                     </tbody>
                 </table>
-                <div class="mt-4 text-[9px] text-justify leading-relaxed">
-                    <strong>Disclaimer:</strong>
-                    The user, contractor, employer, or project owner is responsible for confirming that the contents of this document appropriately reflect the specific work activities, site conditions, and applicable laws, regulations, and project requirements before implementation. While reasonable efforts are made to provide useful and structured safety information, the provider shall not be liable for any damage, claim, or legal action arising from the use of this document.
+
+                {{-- Toolbox Talk Section --}}
+                <div class="mt-16 page-break-before">
+                    <div
+                        style="background-color: {{ $headerColor ?? \App\Models\Setting::where('key', 'header_color')->value('value') ?? '#1a3a6b' }}; color: #fff; font-weight: bold; font-size: 14px; padding: 12px; text-align: center; text-transform: uppercase; margin-bottom: 0;">
+                        TOOLBOX MEETING<br>
+                        <span style="font-size: 12px; font-weight: normal; text-transform: none;">(This JSA has been
+                            discussed with the following crew)</span>
+                    </div>
+                    <table class="w-full border-collapse border border-black">
+                        <thead>
+                            <tr class="text-white text-[14px] uppercase"
+                                style="background-color: {{ $jsaTableHeaderColor }}">
+                                <th class="border border-black p-3 w-[50px] text-center">No.</th>
+                                <th class="border border-black p-3 w-[250px]">Name (Print)</th>
+                                <th class="border border-black p-3">Designation/Role</th>
+                                <th class="border border-black p-3 w-[150px]">Signature</th>
+                                <th class="border border-black p-3 w-[100px]">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for($i = 1; $i <= 10; $i++)
+                                <tr>
+                                    <td class="border border-black p-3 h-[35px] text-[12px] text-center font-bold">{{ $i }}.
+                                    </td>
+                                    <td class="border border-black p-3 h-[35px] text-[12px]">&nbsp;</td>
+                                    <td class="border border-black p-3 h-[35px] text-[12px]">&nbsp;</td>
+                                    <td class="border border-black p-3 h-[35px] text-[12px]">&nbsp;</td>
+                                    <td class="border border-black p-3 h-[35px] text-[12px]">&nbsp;</td>
+                                </tr>
+                            @endfor
+                        </tbody>
+                    </table>
+                    <div class="mt-4 text-[9px] text-justify leading-relaxed">
+                        <strong>Disclaimer:</strong>
+                        The user, contractor, employer, or project owner is responsible for confirming that the contents
+                        of this document appropriately reflect the specific work activities, site conditions, and
+                        applicable laws, regulations, and project requirements before implementation. While reasonable
+                        efforts are made to provide useful and structured safety information, the provider shall not be
+                        liable for any damage, claim, or legal action arising from the use of this document.
+                    </div>
                 </div>
-            </div>
 
             </div>
         </div>
@@ -689,90 +806,80 @@ new #[Layout('layouts.safety')] class extends Component {
 
 
     @if($showReviewModal)
-        <div 
-            x-data="{ show: @entangle('showReviewModal') }"
-            x-show="show"
-            x-transition:enter="transition ease-out duration-300"
-            x-transition:enter-start="opacity-0"
-            x-transition:enter-end="opacity-100"
-            x-transition:leave="transition ease-in duration-200"
-            x-transition:leave-start="opacity-100"
-            x-transition:leave-end="opacity-0"
-            class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4"
-        >
-            <div
-                x-show="show"
-                x-transition:enter="transition ease-out duration-300 transform"
+        <div x-data="{ show: @entangle('showReviewModal') }" x-show="show"
+            x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+            class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+            <div x-show="show" x-transition:enter="transition ease-out duration-300 transform"
                 x-transition:enter-start="opacity-0 scale-95 translate-y-4"
                 x-transition:enter-end="opacity-100 scale-100 translate-y-0"
                 x-transition:leave="transition ease-in duration-200 transform"
                 x-transition:leave-start="opacity-100 scale-100 translate-y-0"
                 x-transition:leave-end="opacity-0 scale-95 translate-y-4"
-                class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative"
-            >
+                class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative">
                 {{-- Review Progress Overlay --}}
-                <div
-                    x-data="{
-                        progress: 0,
-                        msgIdx: 0,
-                        messages: [
-                            'Reading your document...',
-                            'Analyzing requested changes...',
-                            'Applying improvements...',
-                            'Updating safety controls...',
-                            'Finalizing revisions...'
-                        ],
-                        timer: null,
-                        msgTimer: null,
-                        startProgress() {
-                            this.progress = 0;
-                            this.msgIdx = 0;
-                            clearInterval(this.timer);
-                            clearInterval(this.msgTimer);
-                            this.timer = setInterval(() => {
-                                if (this.progress < 88) {
-                                    const rem = 88 - this.progress;
-                                    this.progress = Math.min(88, this.progress + Math.max(0.4, rem * 0.02));
-                                }
-                            }, 250);
-                            this.msgTimer = setInterval(() => {
-                                this.msgIdx = (this.msgIdx + 1) % this.messages.length;
-                            }, 3000);
-                        },
-                        completeProgress() {
-                            clearInterval(this.timer);
-                            clearInterval(this.msgTimer);
-                            this.progress = 100;
-                        },
-                        init() {
-                            const self = this;
-                            const cleanup = Livewire.hook('commit', ({ commit, succeed, fail }) => {
-                                const calls = commit.calls || [];
-                                if (!calls.some(c => c.method === 'review')) return;
-                                self.startProgress();
-                                succeed(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
-                                fail(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
-                            });
-                            this.$cleanup(cleanup);
-                        }
-                    }"
-                    x-show="progress > 0"
-                    style="display: none;"
-                    class="absolute inset-0 bg-white rounded-3xl flex flex-col items-center justify-center z-10 p-8"
-                >
+                <div x-data="{
+                                        progress: 0,
+                                        msgIdx: 0,
+                                        messages: [
+                                            'Reading your document...',
+                                            'Analyzing requested changes...',
+                                            'Applying improvements...',
+                                            'Updating safety controls...',
+                                            'Finalizing revisions...'
+                                        ],
+                                        timer: null,
+                                        msgTimer: null,
+                                        startProgress() {
+                                            this.progress = 0;
+                                            this.msgIdx = 0;
+                                            clearInterval(this.timer);
+                                            clearInterval(this.msgTimer);
+                                            this.timer = setInterval(() => {
+                                                if (this.progress < 88) {
+                                                    const rem = 88 - this.progress;
+                                                    this.progress = Math.min(88, this.progress + Math.max(0.4, rem * 0.02));
+                                                }
+                                            }, 250);
+                                            this.msgTimer = setInterval(() => {
+                                                this.msgIdx = (this.msgIdx + 1) % this.messages.length;
+                                            }, 3000);
+                                        },
+                                        completeProgress() {
+                                            clearInterval(this.timer);
+                                            clearInterval(this.msgTimer);
+                                            this.progress = 100;
+                                        },
+                                        init() {
+                                            const self = this;
+                                            const cleanup = Livewire.hook('commit', ({ commit, succeed, fail }) => {
+                                                const calls = commit.calls || [];
+                                                if (!calls.some(c => c.method === 'review')) return;
+                                                self.startProgress();
+                                                succeed(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 100; setTimeout(() => { self.progress = 0; }, 800); });
+                                                fail(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
+                                            });
+                                            this.$cleanup(cleanup);
+                                        }
+                                    }" x-show="progress > 0" style="display: none;"
+                    class="absolute inset-0 bg-white rounded-3xl flex flex-col items-center justify-center z-10 p-8">
                     <h4 class="text-lg font-black text-slate-900 uppercase tracking-tighter mb-1">Applying Changes</h4>
                     <p x-text="messages[msgIdx]" class="text-slate-500 font-medium text-sm mb-6 h-5"></p>
                     <div class="bg-slate-100 rounded-full h-2 w-full overflow-hidden shadow-inner">
-                        <div
-                            class="h-full bg-primary rounded-full transition-all duration-300 ease-out"
-                            :style="`width: ${progress}%`"
-                        ></div>
+                        <div class="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+                            :style="`width: ${progress}%`"></div>
                     </div>
                     <p class="text-sm font-bold text-slate-400 mt-2" x-text="`${Math.round(progress)}%`"></p>
                 </div>
 
-                <button @click="show = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                <button @click="show = false"
+                    class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                    </svg>
                 </button>
 
                 <div class="mb-8 text-center flex flex-col items-center">
@@ -780,30 +887,49 @@ new #[Layout('layouts.safety')] class extends Component {
                         <img src="/logo.svg" alt="QuickJHA Logo" class="h-12 w-auto object-contain" />
                     </div>
                     <h3 class="text-2xl font-black text-slate-900 uppercase tracking-tighter italic">Review Document</h3>
-                    <p class="text-slate-500 font-medium mt-2">Tell us exactly what you want to improve or add to your document. Remaining reviews: {{ 5 - $reviewCount }}</p>
+                    <p class="text-black-500 font-medium mt-2">Tell us exactly what you want to improve or add to your
+                        document. Remaining reviews: {{ 5 - $reviewCount }}</p>
                 </div>
 
                 <div class="space-y-6">
                     <div>
-                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Improvement Request</label>
+                        <label
+                            class="block text-[10px] font-black uppercase tracking-widest text-black-400 mb-2">Improvement
+                            Request</label>
                         <textarea wire:model="reviewRequest"
                             class="w-full rounded-2xl bg-slate-50 border-0 ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 p-4 min-h-[150px] font-medium text-slate-900 placeholder:text-slate-300 transition-all"
                             placeholder="e.g., 'Add more detailed controls for working at heights' or 'Include specific safety regulations for electrical tools'"></textarea>
-                        @error('reviewRequest') <span class="text-rose-600 text-[10px] font-bold uppercase mt-2 block">{{ $message }}</span> @enderror
+                        @error('reviewRequest') <span
+                        class="text-rose-600 text-[10px] font-bold uppercase mt-2 block">{{ $message }}</span> @enderror
                     </div>
 
                     <button wire:click="review" wire:loading.attr="disabled"
                         class="w-full bg-primary text-primary-foreground font-black py-4 rounded-2xl uppercase tracking-widest text-sm hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed group">
                         <span wire:loading.remove wire:target="review" class="flex items-center justify-center gap-2">
                             Apply Changes
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="group-hover:translate-x-1 transition-transform"><path d="m9 18 6-6-6-6"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                                class="group-hover:translate-x-1 transition-transform">
+                                <path d="m9 18 6-6-6-6" />
+                            </svg>
                         </span>
                         <span wire:loading wire:target="review" class="flex items-center justify-center">
-                            <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                            <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="2" x2="12" y2="6" />
+                                <line x1="12" y1="18" x2="12" y2="22" />
+                                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+                                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+                                <line x1="2" y1="12" x2="6" y2="12" />
+                                <line x1="18" y1="12" x2="22" y2="12" />
+                                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+                                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+                            </svg>
                         </span>
                     </button>
 
-                    <p class="text-[10px] text-center text-slate-400 font-bold uppercase tracking-tight">
+                    <p class="text-[10px] text-center text-black-400 font-bold uppercase tracking-tight">
                         Note: This will replace your current analysis with the improved version.
                     </p>
                 </div>
@@ -813,52 +939,54 @@ new #[Layout('layouts.safety')] class extends Component {
 
     {{-- Professional Review Instructions Modal --}}
     @if($showProfessionalReviewModal)
-        <div 
-            x-data="{ show: @entangle('showProfessionalReviewModal') }"
-            x-show="show"
-            x-transition:enter="transition ease-out duration-300"
-            x-transition:enter-start="opacity-0"
-            x-transition:enter-end="opacity-100"
-            x-transition:leave="transition ease-in duration-200"
-            x-transition:leave-start="opacity-100"
-            x-transition:leave-end="opacity-0"
-            class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4"
-        >
-            <div 
-                x-show="show"
-                x-transition:enter="transition ease-out duration-300 transform"
+        <div x-data="{ show: @entangle('showProfessionalReviewModal') }" x-show="show"
+            x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+            class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4">
+            <div x-show="show" x-transition:enter="transition ease-out duration-300 transform"
                 x-transition:enter-start="opacity-0 scale-95 translate-y-4"
                 x-transition:enter-end="opacity-100 scale-100 translate-y-0"
                 x-transition:leave="transition ease-in duration-200 transform"
                 x-transition:leave-start="opacity-100 scale-100 translate-y-0"
                 x-transition:leave-end="opacity-0 scale-95 translate-y-4"
-                class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative"
-            >
-                <button @click="show = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative">
+                <button @click="show = false"
+                    class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                    </svg>
                 </button>
 
                 <div class="mb-8 text-center flex flex-col items-center">
                     <div class="mb-6">
                         <img src="/logo.svg" alt="QuickJHA Logo" class="h-12 w-auto object-contain" />
                     </div>
-                    <h3 class="text-2xl font-black text-slate-900 uppercase tracking-tighter italic">Professional Review</h3>
-                    <p class="text-slate-500 font-medium mt-2">Your document will be reviewed by our professional team for $5. Tell us what level of improvements you need.</p>
+                    <h3 class="text-2xl font-black text-slate-900 uppercase tracking-tighter italic">Professional Review
+                    </h3>
+                    <p class="text-black-500 font-medium mt-2">Your document will be reviewed by our professional team for
+                        $5. Tell us what level of improvements you need.</p>
                 </div>
 
                 <div class="space-y-6">
                     <div>
-                        <label class="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Instructions</label>
-                        <textarea wire:model="professionalReviewMessage" 
+                        <label
+                            class="block text-[10px] font-black uppercase tracking-widest text-black-400 mb-2">Instructions</label>
+                        <textarea wire:model="professionalReviewMessage"
                             class="w-full rounded-2xl bg-slate-50 border-0 ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 p-4 min-h-[150px] font-medium text-slate-900 placeholder:text-slate-300 transition-all"
                             placeholder="e.g., 'Ensure all roof safety protocols are covered...'"></textarea>
                     </div>
 
-                    <button wire:click="startProfessionalReview" 
+                    <button wire:click="startProfessionalReview"
                         class="w-full bg-primary text-primary-foreground font-black py-4 rounded-2xl uppercase tracking-widest text-sm hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group">
                         <span class="flex items-center justify-center gap-2">
                             Request Expert Review ($5)
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m9 18 6-6-6-6" />
+                            </svg>
                         </span>
                     </button>
                 </div>

@@ -56,6 +56,9 @@ new #[Layout('layouts.safety')] class extends Component {
         session(['impersonator_id' => auth()->id()]);
         auth()->login($userToImpersonate);
 
+        $displayName = $userToImpersonate->name ?: $userToImpersonate->email;
+        session()->flash('success', "You are now impersonating {$displayName}.");
+
         return redirect()->route('user-dashboard');
     }
 

@@ -655,16 +655,43 @@ new #[Layout('layouts.safety')] class extends Component {
         }" x-show="progress > 0" x-transition:enter="transition ease-out duration-300"
         x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" style="display: none;"
         class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[1000] flex items-center justify-center">
-        <div class="bg-white rounded-3xl p-10 w-full max-w-sm shadow-2xl text-center mx-4">
-            <h3 class="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">Creating Document</h3>
-            <p x-text="messages[msgIdx]" class="text-slate-500 font-medium text-sm mb-8 h-5"></p>
-            <div class="bg-slate-100 rounded-full h-2.5 w-full overflow-hidden shadow-inner mb-3">
-                <div class="h-full bg-primary rounded-full transition-all duration-300 ease-out"
-                    :style="`width: ${progress}%`"></div>
+        <div class="bg-white rounded-[2.5rem] p-12 w-full max-w-md shadow-[0_20px_70px_-10px_rgba(0,0,0,0.3)] text-center mx-4 relative overflow-hidden border border-slate-100">
+            <!-- Subtle background decoration -->
+            <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl"></div>
+            <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl"></div>
+            
+            <div class="relative z-10">
+                <div class="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-8 animate-bounce" style="animation-duration: 3s;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-primary animate-spin-slow">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>
+                    </svg>
+                </div>
+
+                <h3 class="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-3 italic">Creating Document</h3>
+                <p x-text="messages[msgIdx]" class="text-slate-600 font-bold text-base mb-10 h-6"></p>
+                
+                <div class="relative mb-4">
+                    <div class="bg-slate-100 rounded-full h-4 w-full overflow-hidden shadow-inner ring-1 ring-slate-200/50">
+                        <div class="h-full bg-gradient-to-r from-primary to-blue-400 rounded-full transition-all duration-300 ease-out shadow-lg"
+                            :style="`width: ${progress}%`"></div>
+                    </div>
+                    <!-- Glow effect for progress bar -->
+                    <div class="absolute top-0 left-0 h-4 bg-primary/30 blur-md rounded-full transition-all duration-300 ease-out"
+                        :style="`width: ${progress}%`"></div>
+                </div>
+
+                <div class="flex items-center justify-between px-1">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Progress</span>
+                    <span class="text-lg font-black text-primary italic" x-text="`${Math.round(progress)}%`"></span>
+                </div>
+
+                <div class="mt-10 pt-8 border-t border-slate-100">
+                    <p class="text-xs text-slate-400 font-bold uppercase tracking-widest flex items-center justify-center gap-2">
+                        <svg class="animate-spin h-3 w-3 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        Please keep window open
+                    </p>
+                </div>
             </div>
-            <p class="text-sm font-bold text-slate-400" x-text="`${Math.round(progress)}%`"></p>
-            <p class="text-[10px] text-slate-300 font-medium mt-4 leading-relaxed">This may take up to 2
-                minutes.<br>Please keep this window open.</p>
         </div>
     </div>
 
@@ -683,6 +710,14 @@ new #[Layout('layouts.safety')] class extends Component {
 
         .animate-float {
             animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+            animation: spin-slow 12s linear infinite;
         }
 
         .custom-scrollbar::-webkit-scrollbar {

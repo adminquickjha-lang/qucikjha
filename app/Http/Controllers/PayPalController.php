@@ -7,6 +7,7 @@ use App\Models\ProfessionalReview;
 use App\Models\SafetyDocument;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Srmklive\PayPal\Services\PayPal as PayPalClient;
 
@@ -21,131 +22,179 @@ class PayPalController extends Controller
             default => 19.90,
         };
 
-        $provider = new PayPalClient;
-        $provider->setApiCredentials(config('paypal'));
-        $token = $provider->getAccessToken();
+        $previewRoute = route('preview.'.strtolower($document->document_type), ['id' => $document->id]);
 
-        $response = $provider->createOrder([
-            'intent' => 'CAPTURE',
-            'application_context' => [
-                'return_url' => route('paypal.success', ['document' => $document->id]),
-                'cancel_url' => route('preview.'.strtolower($document->document_type), ['id' => $document->id]),
-                'landing_page' => 'BILLING',
-                'user_action' => 'PAY_NOW',
-            ],
-            'purchase_units' => [
-                0 => [
-                    'amount' => [
-                        'currency_code' => 'USD',
-                        'value' => number_format($price, 2, '.', ''),
-                    ],
-                    'description' => 'Safety Document: '.$document->project_name,
+        try {
+            $provider = new PayPalClient;
+            $provider->setApiCredentials(config('paypal'));
+            $provider->getAccessToken();
+
+            $response = $provider->createOrder([
+                'intent' => 'CAPTURE',
+                'application_context' => [
+                    'return_url' => route('paypal.success', ['document' => $document->id]),
+                    'cancel_url' => $previewRoute,
+                    'landing_page' => 'BILLING',
+                    'user_action' => 'PAY_NOW',
                 ],
-            ],
-        ]);
-
-        if (isset($response['id']) && $response['id'] != null) {
-            // Update document with paypal order id using stripe_session_id as a temp field to avoid schema change
-            $document->update([
-                'stripe_session_id' => $response['id'],
-                'amount' => $price,
+                'purchase_units' => [
+                    0 => [
+                        'amount' => [
+                            'currency_code' => 'USD',
+                            'value' => number_format($price, 2, '.', ''),
+                        ],
+                        'description' => 'Safety Document: '.$document->project_name,
+                    ],
+                ],
             ]);
 
-            foreach ($response['links'] as $links) {
-                if ($links['rel'] == 'approve') {
-                    return redirect()->away($links['href']);
+            if (isset($response['id']) && $response['id'] != null) {
+                $document->update([
+                    'stripe_session_id' => $response['id'],
+                    'amount' => $price,
+                ]);
+
+                foreach ($response['links'] as $links) {
+                    if ($links['rel'] == 'approve') {
+                        return redirect()->away($links['href']);
+                    }
                 }
             }
-        }
 
-        return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])->with('error', $response['message'] ?? 'Something went wrong with PayPal.');
+            $errorMessage = $response['message'] ?? 'PayPal did not return a valid order. Please try again.';
+            Log::error('PayPal checkout failed', ['document_id' => $document->id, 'response' => $response]);
+
+            return redirect($previewRoute)->with('error', $errorMessage);
+
+        } catch (\Exception $e) {
+            Log::error('PayPal checkout exception', ['document_id' => $document->id, 'error' => $e->getMessage()]);
+
+            return redirect($previewRoute)->with('error', 'Payment could not be initiated. Please try again or contact support.');
+        }
     }
 
     public function success(Request $request, SafetyDocument $document)
     {
-        $provider = new PayPalClient;
-        $provider->setApiCredentials(config('paypal'));
-        $provider->getAccessToken();
+        $previewRoute = route('preview.'.strtolower($document->document_type), ['id' => $document->id]);
 
-        $response = $provider->capturePaymentOrder($request['token']);
+        try {
+            $provider = new PayPalClient;
+            $provider->setApiCredentials(config('paypal'));
+            $provider->getAccessToken();
 
-        if (isset($response['status']) && $response['status'] == 'COMPLETED') {
-            $transactionId = $response['purchase_units'][0]['payments']['captures'][0]['id'] ?? null;
+            $response = $provider->capturePaymentOrder($request['token']);
 
-            $document->update([
-                'is_paid' => true,
-                'transaction_id' => $transactionId,
-            ]);
+            if (isset($response['status']) && $response['status'] == 'COMPLETED') {
+                $transactionId = $response['purchase_units'][0]['payments']['captures'][0]['id'] ?? null;
 
-            return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])->with('success', 'Document unlocked successfully via PayPal!');
+                $document->update([
+                    'is_paid' => true,
+                    'transaction_id' => $transactionId,
+                ]);
+
+                return redirect($previewRoute)->with('success', 'Document unlocked successfully via PayPal!');
+            }
+
+            Log::warning('PayPal payment not completed', ['document_id' => $document->id, 'status' => $response['status'] ?? 'unknown', 'response' => $response]);
+
+            return redirect($previewRoute)->with('error', 'PayPal payment verification failed. Please contact support if you were charged.');
+
+        } catch (\Exception $e) {
+            Log::error('PayPal success exception', ['document_id' => $document->id, 'error' => $e->getMessage()]);
+
+            return redirect($previewRoute)->with('error', 'Payment verification failed. Please contact support.');
         }
-
-        return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])->with('error', 'PayPal payment verification failed.');
     }
 
     public function professionalReviewCheckout(ProfessionalReview $review)
     {
         $document = $review->safetyDocument;
+        $previewRoute = route('preview.'.strtolower($document->document_type), ['id' => $document->id]);
 
-        $provider = new PayPalClient;
-        $provider->setApiCredentials(config('paypal'));
-        $token = $provider->getAccessToken();
+        try {
+            $provider = new PayPalClient;
+            $provider->setApiCredentials(config('paypal'));
+            $provider->getAccessToken();
 
-        $response = $provider->createOrder([
-            'intent' => 'CAPTURE',
-            'application_context' => [
-                'return_url' => route('paypal.review-success', ['review' => $review->id]),
-                'cancel_url' => route('preview.'.strtolower($document->document_type), ['id' => $document->id]),
-                'landing_page' => 'BILLING',
-                'user_action' => 'PAY_NOW',
-            ],
-            'purchase_units' => [
-                0 => [
-                    'amount' => [
-                        'currency_code' => 'USD',
-                        'value' => '5.00',
-                    ],
-                    'description' => 'Professional Review: '.$document->project_name,
+            $response = $provider->createOrder([
+                'intent' => 'CAPTURE',
+                'application_context' => [
+                    'return_url' => route('paypal.review-success', ['review' => $review->id]),
+                    'cancel_url' => $previewRoute,
+                    'landing_page' => 'BILLING',
+                    'user_action' => 'PAY_NOW',
                 ],
-            ],
-        ]);
+                'purchase_units' => [
+                    0 => [
+                        'amount' => [
+                            'currency_code' => 'USD',
+                            'value' => '5.00',
+                        ],
+                        'description' => 'Professional Review: '.$document->project_name,
+                    ],
+                ],
+            ]);
 
-        if (isset($response['id']) && $response['id'] != null) {
-            $review->update(['stripe_session_id' => $response['id']]);
+            if (isset($response['id']) && $response['id'] != null) {
+                $review->update(['stripe_session_id' => $response['id']]);
 
-            foreach ($response['links'] as $links) {
-                if ($links['rel'] == 'approve') {
-                    return redirect()->away($links['href']);
+                foreach ($response['links'] as $links) {
+                    if ($links['rel'] == 'approve') {
+                        return redirect()->away($links['href']);
+                    }
                 }
             }
-        }
 
-        return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])->with('error', $response['message'] ?? 'Something went wrong with PayPal.');
+            $errorMessage = $response['message'] ?? 'PayPal did not return a valid order. Please try again.';
+            Log::error('PayPal review checkout failed', ['review_id' => $review->id, 'response' => $response]);
+
+            return redirect($previewRoute)->with('error', $errorMessage);
+
+        } catch (\Exception $e) {
+            Log::error('PayPal review checkout exception', ['review_id' => $review->id, 'error' => $e->getMessage()]);
+
+            return redirect($previewRoute)->with('error', 'Payment could not be initiated. Please try again or contact support.');
+        }
     }
 
     public function successReview(Request $request, ProfessionalReview $review)
     {
-        $provider = new PayPalClient;
-        $provider->setApiCredentials(config('paypal'));
-        $provider->getAccessToken();
+        $previewRoute = route('preview.'.strtolower($review->safetyDocument->document_type), ['id' => $review->safety_document_id]);
 
-        $response = $provider->capturePaymentOrder($request['token']);
+        try {
+            $provider = new PayPalClient;
+            $provider->setApiCredentials(config('paypal'));
+            $provider->getAccessToken();
 
-        if (isset($response['status']) && $response['status'] == 'COMPLETED') {
-            $transactionId = $response['purchase_units'][0]['payments']['captures'][0]['id'] ?? null;
+            $response = $provider->capturePaymentOrder($request['token']);
 
-            $review->update([
-                'is_paid' => true,
-                'transaction_id' => $transactionId,
-            ]);
+            if (isset($response['status']) && $response['status'] == 'COMPLETED') {
+                $transactionId = $response['purchase_units'][0]['payments']['captures'][0]['id'] ?? null;
 
-            // Notify Admin
-            $adminEmail = User::where('role', 'admin')->first()?->email ?? 'admin@example.com';
-            Mail::to($adminEmail)->send(new ProfessionalReviewRequestMail($review));
+                $review->update([
+                    'is_paid' => true,
+                    'transaction_id' => $transactionId,
+                ]);
 
-            return redirect()->route('preview.'.strtolower($review->safetyDocument->document_type), ['id' => $review->safety_document_id])->with('success', 'Professional review requested successfully via PayPal!');
+                // Notify Admin
+                $adminEmail = User::where('role', 'admin')->first()?->email ?? 'admin@example.com';
+                try {
+                    Mail::to($adminEmail)->send(new ProfessionalReviewRequestMail($review));
+                } catch (\Exception $mailException) {
+                    Log::error('Admin notification mail failed', ['error' => $mailException->getMessage()]);
+                }
+
+                return redirect($previewRoute)->with('success', 'Professional review requested successfully via PayPal!');
+            }
+
+            Log::warning('PayPal review payment not completed', ['review_id' => $review->id, 'status' => $response['status'] ?? 'unknown']);
+
+            return redirect($previewRoute)->with('error', 'PayPal payment verification failed. Please contact support if you were charged.');
+
+        } catch (\Exception $e) {
+            Log::error('PayPal review success exception', ['review_id' => $review->id, 'error' => $e->getMessage()]);
+
+            return redirect($previewRoute)->with('error', 'Payment verification failed. Please contact support.');
         }
-
-        return redirect()->route('preview.'.strtolower($review->safetyDocument->document_type), ['id' => $review->safety_document_id])->with('error', 'PayPal payment verification failed.');
     }
 }
