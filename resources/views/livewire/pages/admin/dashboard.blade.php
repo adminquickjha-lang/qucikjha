@@ -188,12 +188,18 @@ new #[Layout('layouts.safety')] class extends Component {
                 <!-- Date Range Filter -->
                 <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
 
-                    {{-- Mobile: two clean date inputs side by side --}}
-                    <div class="grid grid-cols-2 gap-2 sm:hidden">
-                        <input type="date" wire:model.live="fromDate"
-                            class="h-[46px] px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
-                        <input type="date" wire:model.live="toDate"
-                            class="h-[46px] px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
+                    {{-- Mobile: stacked full-width date inputs with labels --}}
+                    <div class="flex flex-col gap-2 sm:hidden w-full">
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[9px] font-black uppercase tracking-widest text-primary pl-1">From</label>
+                            <input type="date" wire:model.live="fromDate"
+                                class="h-[48px] px-4 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[9px] font-black uppercase tracking-widest text-primary pl-1">To</label>
+                            <input type="date" wire:model.live="toDate"
+                                class="h-[48px] px-4 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
+                        </div>
                     </div>
 
                     {{-- Desktop: combined floating-label pill --}}
@@ -269,6 +275,19 @@ new #[Layout('layouts.safety')] class extends Component {
                 </thead>
                 <tbody class="divide-y divide-border/30">
                     @php $projects = $this->projects(); @endphp
+                    @if($projects->isEmpty())
+                        <tr>
+                            <td colspan="7" class="px-8 py-20 text-center">
+                                <div class="flex flex-col items-center gap-3">
+                                    <div class="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L15 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    </div>
+                                    <p class="text-sm font-black uppercase tracking-widest text-muted-foreground">No orders found</p>
+                                    <p class="text-xs text-muted-foreground font-medium">Try adjusting your date filters or check back later.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    @endif
                     @foreach($projects as $p)
 
                         <tr class="hover:bg-secondary/20 transition-colors">
@@ -311,6 +330,15 @@ new #[Layout('layouts.safety')] class extends Component {
         <!-- Mobile Card View -->
         <div class="block md:hidden">
             @php $projects = $this->projects(); @endphp
+            @if($projects->isEmpty())
+                <div class="p-10 flex flex-col items-center gap-3 text-center">
+                    <div class="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L15 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <p class="text-sm font-black uppercase tracking-widest text-muted-foreground">No orders found</p>
+                    <p class="text-xs text-muted-foreground font-medium">Try adjusting your date filters or check back later.</p>
+                </div>
+            @else
             <div class="p-4 space-y-4">
                 @foreach($projects as $p)
                     <div
@@ -358,6 +386,7 @@ new #[Layout('layouts.safety')] class extends Component {
                     </div>
                 @endforeach
             </div>
+            @endif
         </div>
         @if($projects->hasPages())
             <div class="px-8 py-6 border-t border-border/50 bg-secondary/50">
