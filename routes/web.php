@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\Auth\SocialiteController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\PayPalController;
 use App\Http\Controllers\StripeController;
 use App\Http\Middleware\IsAdmin;
 use App\Models\ProfessionalReview;
+use App\Models\SafetyDocument;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
@@ -74,20 +76,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/stripe/success/{document}', [StripeController::class, 'success'])->name('stripe.success');
 
     // PayPal Routes
-    Route::get('/paypal/checkout/{document}', [\App\Http\Controllers\PayPalController::class, 'checkout'])->name('paypal.checkout');
-    Route::get('/paypal/review-checkout/{review}', [\App\Http\Controllers\PayPalController::class, 'professionalReviewCheckout'])->name('paypal.review-checkout');
-    Route::get('/paypal/review-success/{review}', [\App\Http\Controllers\PayPalController::class, 'successReview'])->name('paypal.review-success');
-    Route::get('/paypal/success/{document}', [\App\Http\Controllers\PayPalController::class, 'success'])->name('paypal.success');
-
-
-    // Paddle Routes
-    Route::get('/paddle/checkout/{document}', [\App\Http\Controllers\PaddleController::class, 'checkout'])->name('paddle.checkout');
-    Route::get('/paddle/review-checkout/{review}', [\App\Http\Controllers\PaddleController::class, 'reviewCheckout'])->name('paddle.review-checkout');
+    Route::get('/paypal/checkout/{document}', [PayPalController::class, 'checkout'])->name('paypal.checkout');
+    Route::get('/paypal/review-checkout/{review}', [PayPalController::class, 'professionalReviewCheckout'])->name('paypal.review-checkout');
+    Route::get('/paypal/review-success/{review}', [PayPalController::class, 'successReview'])->name('paypal.review-success');
+    Route::get('/paypal/success/{document}', [PayPalController::class, 'success'])->name('paypal.success');
 
     // Test Checkout (local env only)
-    Route::get('/test/checkout/{document}', function (\App\Models\SafetyDocument $document) {
+    Route::get('/test/checkout/{document}', function (SafetyDocument $document) {
         abort_unless(app()->isLocal(), 403);
         $document->update(['is_paid' => true]);
+
         return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])
             ->with('success', 'Test checkout complete — document unlocked.');
     })->name('test.checkout');
@@ -123,7 +121,6 @@ Route::get('/review/secure/{token}', function ($token) {
 })->name('review.secure');
 
 Route::post('/stripe/webhook', [StripeController::class, 'webhook'])->name('stripe.webhook');
-Route::post('/paddle/webhook', [\App\Http\Controllers\PaddleController::class, 'webhook'])->name('paddle.webhook');
 Route::get('/env-check', function () {
     return [
         'APP_ENV' => env('APP_ENV'),
@@ -135,9 +132,10 @@ Route::get('/env-check', function () {
 Route::get('/anthropic-test', function () {
     try {
         $response = Http::timeout(30)->get('https://api.anthropic.com');
+
         return $response->status();
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
         return $e->getMessage();
     }
 });
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';

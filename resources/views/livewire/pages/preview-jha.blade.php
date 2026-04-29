@@ -99,7 +99,7 @@ new #[Layout('layouts.safety')] class extends Component {
             return redirect()->route('stripe.checkout', ['document' => $this->id]);
         }
         if ($method === 'paypal') {
-            return redirect()->route('paddle.checkout', ['document' => $this->id]);
+            return redirect()->route('paypal.checkout', ['document' => $this->id]);
         }
 
         $this->paymentSuccess = true;
@@ -202,7 +202,7 @@ new #[Layout('layouts.safety')] class extends Component {
         $this->activeReviewId = $review->id;
         $this->showProfessionalReviewModal = false;
         
-        return $this->handleProfessionalReviewPayment('stripe');
+        return $this->handleProfessionalReviewPayment('paypal');
     }
 
     public function handleProfessionalReviewPayment($method)
@@ -211,7 +211,7 @@ new #[Layout('layouts.safety')] class extends Component {
             return redirect()->route('stripe.review-checkout', ['review' => $this->activeReviewId]);
         }
         if ($method === 'paypal') {
-            return redirect()->route('paddle.review-checkout', ['review' => $this->activeReviewId]);
+            return redirect()->route('paypal.review-checkout', ['review' => $this->activeReviewId]);
         }
 
         // Fake Payment Flow
@@ -362,7 +362,7 @@ new #[Layout('layouts.safety')] class extends Component {
                     </div>
                 @endif
             @else
-                <button wire:click="handlePayment('stripe')" class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
+                <button wire:click="handlePayment('paypal')" class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
                     Unlock Document — ${{ $this->price }}
                 </button>
@@ -917,8 +917,7 @@ on JHA. </p>
             x-transition:leave-end="opacity-0"
             class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4"
         >
-            <div 
-                @click.away="show = false"
+            <div
                 x-show="show"
                 x-transition:enter="transition ease-out duration-300 transform"
                 x-transition:enter-start="opacity-0 scale-95 translate-y-4"
@@ -928,6 +927,67 @@ on JHA. </p>
                 x-transition:leave-end="opacity-0 scale-95 translate-y-4"
                 class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative"
             >
+                {{-- Review Progress Overlay --}}
+                <div
+                    x-data="{
+                        progress: 0,
+                        msgIdx: 0,
+                        messages: [
+                            'Reading your document...',
+                            'Analyzing requested changes...',
+                            'Applying improvements...',
+                            'Updating safety controls...',
+                            'Finalizing revisions...'
+                        ],
+                        timer: null,
+                        msgTimer: null,
+                        startProgress() {
+                            this.progress = 0;
+                            this.msgIdx = 0;
+                            clearInterval(this.timer);
+                            clearInterval(this.msgTimer);
+                            this.timer = setInterval(() => {
+                                if (this.progress < 88) {
+                                    const rem = 88 - this.progress;
+                                    this.progress = Math.min(88, this.progress + Math.max(0.4, rem * 0.02));
+                                }
+                            }, 250);
+                            this.msgTimer = setInterval(() => {
+                                this.msgIdx = (this.msgIdx + 1) % this.messages.length;
+                            }, 3000);
+                        },
+                        completeProgress() {
+                            clearInterval(this.timer);
+                            clearInterval(this.msgTimer);
+                            this.progress = 100;
+                        },
+                        init() {
+                            const self = this;
+                            const cleanup = Livewire.hook('commit', ({ commit, succeed, fail }) => {
+                                const calls = commit.calls || [];
+                                if (!calls.some(c => c.method === 'review')) return;
+                                self.startProgress();
+                                succeed(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
+                                fail(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
+                            });
+                            this.$cleanup(cleanup);
+                        }
+                    }"
+                    x-show="progress > 0"
+                    style="display: none;"
+                    class="absolute inset-0 bg-white rounded-3xl flex flex-col items-center justify-center z-10 p-8"
+                >
+                    <h4 class="text-lg font-black text-slate-900 uppercase tracking-tighter mb-1">Applying Changes</h4>
+                    <p x-text="messages[msgIdx]" class="text-slate-500 font-medium text-sm mb-6 h-5"></p>
+                    <div class="bg-slate-100 rounded-full h-2 w-full overflow-hidden shadow-inner">
+                        <div
+                            class="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+                            :style="`width: ${progress}%`"
+                        ></div>
+                    </div>
+                    <p class="text-sm font-bold text-slate-400 mt-2" x-text="`${Math.round(progress)}%`"></p>
+                </div>
+
                 <button @click="show = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
@@ -972,7 +1032,7 @@ on JHA. </p>
 
     {{-- Professional Review Instructions Modal --}}
     @if($showProfessionalReviewModal)
-        <div 
+        <div
             x-data="{ show: @entangle('showProfessionalReviewModal') }"
             x-show="show"
             x-transition:enter="transition ease-out duration-300"

@@ -53,7 +53,7 @@ class PayPalController extends Controller
 
             foreach ($response['links'] as $links) {
                 if ($links['rel'] == 'approve') {
-                    return redirect()->away($this->cardCheckoutUrl($links['href']));
+                    return redirect()->away($links['href']);
                 }
             }
         }
@@ -70,7 +70,12 @@ class PayPalController extends Controller
         $response = $provider->capturePaymentOrder($request['token']);
 
         if (isset($response['status']) && $response['status'] == 'COMPLETED') {
-            $document->update(['is_paid' => true]);
+            $transactionId = $response['purchase_units'][0]['payments']['captures'][0]['id'] ?? null;
+
+            $document->update([
+                'is_paid' => true,
+                'transaction_id' => $transactionId,
+            ]);
 
             return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])->with('success', 'Document unlocked successfully via PayPal!');
         }
@@ -110,7 +115,7 @@ class PayPalController extends Controller
 
             foreach ($response['links'] as $links) {
                 if ($links['rel'] == 'approve') {
-                    return redirect()->away($this->cardCheckoutUrl($links['href']));
+                    return redirect()->away($links['href']);
                 }
             }
         }
@@ -127,7 +132,12 @@ class PayPalController extends Controller
         $response = $provider->capturePaymentOrder($request['token']);
 
         if (isset($response['status']) && $response['status'] == 'COMPLETED') {
-            $review->update(['is_paid' => true]);
+            $transactionId = $response['purchase_units'][0]['payments']['captures'][0]['id'] ?? null;
+
+            $review->update([
+                'is_paid' => true,
+                'transaction_id' => $transactionId,
+            ]);
 
             // Notify Admin
             $adminEmail = User::where('role', 'admin')->first()?->email ?? 'admin@example.com';
@@ -137,16 +147,5 @@ class PayPalController extends Controller
         }
 
         return redirect()->route('preview.'.strtolower($review->safetyDocument->document_type), ['id' => $review->safety_document_id])->with('error', 'PayPal payment verification failed.');
-    }
-
-    private function cardCheckoutUrl(string $approveUrl): string
-    {
-        parse_str(parse_url($approveUrl, PHP_URL_QUERY), $params);
-        $token = $params['token'] ?? '';
-        $base = config('paypal.mode') === 'sandbox'
-            ? 'https://www.sandbox.paypal.com'
-            : 'https://www.paypal.com';
-
-        return "{$base}/checkoutweb/signup?token={$token}";
     }
 }

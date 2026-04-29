@@ -603,6 +603,79 @@ new #[Layout('layouts.safety')] class extends Component {
         </div>
     </form>
 
+    {{-- Document Generation Progress Overlay --}}
+    <div x-data="{
+            progress: 0,
+            msgIdx: 0,
+            messages: [
+                'Analyzing project details...',
+                'Identifying workplace hazards...',
+                'Creating safety controls...',
+                'Assessing risk levels...',
+                'Reviewing compliance standards...',
+                'Compiling document structure...',
+                'Finalizing your document...'
+            ],
+            timer: null,
+            msgTimer: null,
+            startProgress() {
+                this.progress = 0;
+                this.msgIdx = 0;
+                clearInterval(this.timer);
+                clearInterval(this.msgTimer);
+                this.timer = setInterval(() => {
+                    if (this.progress < 88) {
+                        const rem = 88 - this.progress;
+                        this.progress = Math.min(88, this.progress + Math.max(0.35, rem * 0.016));
+                    }
+                }, 300);
+                this.msgTimer = setInterval(() => {
+                    this.msgIdx = (this.msgIdx + 1) % this.messages.length;
+                }, 3500);
+            },
+            completeProgress(redirectUrl) {
+                clearInterval(this.timer);
+                clearInterval(this.msgTimer);
+                this.progress = 100;
+                setTimeout(() => { window.location.href = redirectUrl; }, 600);
+            },
+            init() {
+                const self = this;
+                const cleanup = Livewire.hook('commit', ({ commit, succeed, fail }) => {
+                    const calls = commit.calls || [];
+                    if (!calls.some(c => c.method === 'generate')) return;
+                    self.startProgress();
+                    succeed(({ snapshot, effect }) => {
+                        if (effect && effect.redirect) {
+                            const redirectUrl = effect.redirect;
+                            effect.redirect = null;
+                            self.completeProgress(redirectUrl);
+                        } else {
+                            clearInterval(self.timer);
+                            clearInterval(self.msgTimer);
+                            self.progress = 0;
+                        }
+                    });
+                    fail(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
+                });
+                this.$cleanup(cleanup);
+            }
+        }" x-show="progress > 0" x-transition:enter="transition ease-out duration-300"
+        x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" style="display: none;"
+        class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[1000] flex items-center justify-center">
+        <div class="bg-white rounded-3xl p-10 w-full max-w-sm shadow-2xl text-center mx-4">
+            <h3 class="text-xl font-black text-slate-900 uppercase tracking-tighter mb-2">Creating Document</h3>
+            <p x-text="messages[msgIdx]" class="text-slate-500 font-medium text-sm mb-8 h-5"></p>
+            <div class="bg-slate-100 rounded-full h-2.5 w-full overflow-hidden shadow-inner mb-3">
+                <div class="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+                    :style="`width: ${progress}%`"></div>
+            </div>
+            <p class="text-sm font-bold text-slate-400" x-text="`${Math.round(progress)}%`"></p>
+            <p class="text-[10px] text-slate-300 font-medium mt-4 leading-relaxed">This may take up to 2
+                minutes.<br>Please keep this window open.</p>
+        </div>
+    </div>
+
     <style>
         @keyframes float {
 

@@ -133,7 +133,7 @@ new #[Layout('layouts.safety')] class extends Component {
     </div>
 
     <!-- Stats Row -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
         @foreach($this->stats() as $stat)
             <div class="card-surface p-6 flex items-center gap-5 hover:shadow-xl transition-all duration-300 group">
                 <div
@@ -186,44 +186,61 @@ new #[Layout('layouts.safety')] class extends Component {
                 </div>
 
                 <!-- Date Range Filter -->
-                <div class="flex flex-wrap items-center gap-3">
-                    <div
-                        class="flex items-center bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm focus-within:ring-4 focus-within:ring-primary/10 transition-all h-[46px] w-full md:w-auto">
-                        <div class="relative group/date flex-grow md:flex-grow-0">
+                <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
+
+                    {{-- Mobile: two separate labeled inputs side by side --}}
+                    <div class="grid grid-cols-2 gap-2 sm:hidden">
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[9px] font-black uppercase tracking-widest text-primary pl-1">Start Date</label>
                             <input type="date" wire:model.live="fromDate"
-                                class="bg-transparent border-0 text-[10px] font-black uppercase px-4 py-3 text-slate-900 focus:ring-0 outline-none w-full md:w-36 lg:w-40 cursor-pointer" />
+                                class="h-[46px] px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[9px] font-black uppercase tracking-widest text-primary pl-1">End Date</label>
+                            <input type="date" wire:model.live="toDate"
+                                class="h-[46px] px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none cursor-pointer w-full" />
+                        </div>
+                    </div>
+
+                    {{-- Desktop: combined floating-label pill --}}
+                    <div class="hidden sm:flex items-center bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm focus-within:ring-4 focus-within:ring-primary/10 transition-all h-[46px]">
+                        <div class="relative">
+                            <input type="date" wire:model.live="fromDate"
+                                class="bg-transparent border-0 text-[10px] font-black uppercase px-4 py-3 text-slate-900 focus:ring-0 outline-none w-36 lg:w-40 cursor-pointer" />
                             <span
                                 class="absolute -top-1.5 left-4 px-1 bg-white text-[7px] font-black text-primary uppercase tracking-widest leading-none z-10 pointer-events-none">From</span>
                         </div>
                         <div class="w-px h-6 bg-slate-200 flex-shrink-0"></div>
-                        <div class="relative group/date flex-grow md:flex-grow-0">
+                        <div class="relative">
                             <input type="date" wire:model.live="toDate"
-                                class="bg-transparent border-0 text-[10px] font-black uppercase px-4 py-3 text-slate-900 focus:ring-0 outline-none w-full md:w-36 lg:w-40 cursor-pointer" />
+                                class="bg-transparent border-0 text-[10px] font-black uppercase px-4 py-3 text-slate-900 focus:ring-0 outline-none w-36 lg:w-40 cursor-pointer" />
                             <span
                                 class="absolute -top-1.5 left-4 px-1 bg-white text-[7px] font-black text-primary uppercase tracking-widest leading-none z-10 pointer-events-none">To</span>
                         </div>
                     </div>
 
-                    <button wire:click="$refresh"
-                        class="flex items-center gap-2 bg-primary text-primary-foreground h-[46px] px-6 rounded-2xl font-bold text-[11px] uppercase tracking-widest hover:brightness-110 active:scale-[0.98] transition-all shadow-md shadow-primary/20">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="11" cy="11" r="8" />
-                            <path d="m21 21-4.3-4.3" />
-                        </svg>
-                        Search
-                    </button>
-                    @if($fromDate || $toDate)
-                        <button wire:click="resetFilters"
-                            class="h-[46px] w-[46px] flex items-center justify-center bg-secondary text-muted-foreground border border-border/50 rounded-2xl hover:bg-destructive hover:text-white transition-all shadow-sm"
-                            title="Clear Filters">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                    <div class="flex gap-3">
+                        <button wire:click="$refresh"
+                            class="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary text-primary-foreground h-[46px] px-6 rounded-2xl font-bold text-[11px] uppercase tracking-widest hover:brightness-110 active:scale-[0.98] transition-all shadow-md shadow-primary/20">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                                <path d="M3 3v5h5" />
+                                <circle cx="11" cy="11" r="8" />
+                                <path d="m21 21-4.3-4.3" />
                             </svg>
+                            Search
                         </button>
-                    @endif
+                        @if($fromDate || $toDate)
+                            <button wire:click="resetFilters"
+                                class="h-[46px] w-[46px] flex items-center justify-center bg-secondary text-muted-foreground border border-border/50 rounded-2xl hover:bg-destructive hover:text-white transition-all shadow-sm"
+                                title="Clear Filters">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                                    <path d="M3 3v5h5" />
+                                </svg>
+                            </button>
+                        @endif
+                    </div>
                 </div>
             </div>
         </div>
