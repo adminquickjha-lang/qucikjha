@@ -16,6 +16,10 @@ class ProfessionalReview extends Model
         'progress',
     ];
 
+    protected $casts = [
+        'is_paid' => 'boolean',
+    ];
+
     public function user()
     {
         return $this->belongsTo(User::class);

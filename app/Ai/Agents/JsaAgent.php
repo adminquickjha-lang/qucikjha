@@ -17,8 +17,8 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::OpenRouter)]
-#[Model('openrouter/free')]
+#[Provider(Lab::Anthropic)]
+#[Model('claude-3-5-sonnet-latest')]
 #[Temperature(0.0)]
 #[Timeout(300)]
 #[MaxTokens(16000)]

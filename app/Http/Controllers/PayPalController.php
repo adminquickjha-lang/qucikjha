@@ -15,6 +15,8 @@ class PayPalController extends Controller
 {
     public function checkout(SafetyDocument $document)
     {
+        abort_unless(auth()->id() === $document->user_id, 403);
+
         $price = match (strtoupper($document->document_type)) {
             'JHA' => 19.90,
             'AHA' => 19.90,
@@ -108,6 +110,8 @@ class PayPalController extends Controller
 
     public function professionalReviewCheckout(ProfessionalReview $review)
     {
+        abort_unless(auth()->id() === $review->user_id, 403);
+
         $document = $review->safetyDocument;
         $previewRoute = route('preview.'.strtolower($document->document_type), ['id' => $document->id]);
 

@@ -62,11 +62,12 @@ new #[Layout('layouts.safety')] class extends Component {
         $paidOrdersCount = SafetyDocument::where('is_paid', true)->count();
         $totalRevenue = SafetyDocument::where('is_paid', true)->sum('amount');
         $downloads = SafetyDocument::where('download_ready', true)->count();
+        $totalAiCost = SafetyDocument::sum('cost') + \App\Models\DocumentReview::sum('cost');
 
         return [
             ['label' => 'Total Orders', 'value' => $totalOrders, 'icon' => 'file-text', 'color' => 'text-primary'],
             ['label' => 'Revenue', 'value' => '$' . number_format($totalRevenue, 2), 'icon' => 'dollar-sign', 'color' => 'text-emerald-500'],
-            ['label' => 'Paid Orders', 'value' => $paidOrdersCount, 'icon' => 'trending-up', 'color' => 'text-blue-500'],
+            ['label' => 'AI Spend', 'value' => '$' . number_format($totalAiCost, 2), 'icon' => 'zap', 'color' => 'text-purple-500'],
             ['label' => 'Docs Ready', 'value' => $downloads, 'icon' => 'download', 'color' => 'text-amber-500'],
         ];
     }
@@ -185,10 +186,12 @@ new #[Layout('layouts.safety')] class extends Component {
                             <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                         </svg>
                     @elseif($stat['icon'] === 'trending-up')
+                            <path d="m22 7-8.5 15.5-5.5-5.5-6.5 6.5" />
+                        </svg>
+                    @elseif($stat['icon'] === 'zap')
                         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
-                            <polyline points="16 7 22 7 22 13" />
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
                         </svg>
                     @elseif($stat['icon'] === 'download')
                         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
@@ -311,6 +314,12 @@ new #[Layout('layouts.safety')] class extends Component {
                             Status</th>
                         <th
                             class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50 text-right">
+                            Tokens</th>
+                        <th
+                            class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50 text-right">
+                            AI Cost</th>
+                        <th
+                            class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50 text-right">
                             Price</th>
                     </tr>
                 </thead>
@@ -361,6 +370,14 @@ new #[Layout('layouts.safety')] class extends Component {
                                     {{ $p->is_paid ? 'Paid' : 'Unpaid' }}
                                 </span>
                             </td>
+                            <td class="px-8 py-6 text-right font-bold text-xs text-slate-500">
+                                <a href="{{ route('admin.usage', ['id' => $p->id]) }}" wire:navigate class="hover:text-primary hover:underline transition-colors">
+                                    {{ number_format($p->total_tokens) }}
+                                </a>
+                            </td>
+                            <td class="px-8 py-6 text-right font-bold text-sm text-purple-600">
+                                ${{ number_format($p->total_ai_cost, 4) }}
+                            </td>
                             <td class="px-8 py-6 text-right font-black text-sm">${{ $p->amount ?: '19.90' }}</td>
                         </tr>
                     @endforeach
@@ -407,6 +424,13 @@ new #[Layout('layouts.safety')] class extends Component {
                                 <span class="w-1 h-1 rounded-full bg-slate-400"></span>
                                 <p class="text-[9px] font-bold tracking-tight uppercase text-slate-500 italic">
                                     {{ Str::limit($p->company_name, 35) }}</p>
+                            </div>
+                            <div class="flex items-center justify-between mt-2">
+                                <a href="{{ route('admin.usage', ['id' => $p->id]) }}" wire:navigate class="flex items-center gap-1.5 px-2 py-1 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-purple-100 hover:bg-purple-600 hover:text-white transition-all">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                    Audit Usage: {{ number_format($p->total_tokens) }} tokens
+                                </a>
+                                <span class="text-[9px] font-black text-purple-600/60 italic">${{ number_format($p->total_ai_cost, 4) }}</span>
                             </div>
                         </div>
 

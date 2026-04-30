@@ -15,9 +15,11 @@ class DocumentController extends Controller
     {
         $document = SafetyDocument::findOrFail($id);
 
-        if (! $document->is_paid && auth()->id() !== $document->user_id) {
-            abort(403, 'Unauthorized access.');
-        }
+        abort_unless(
+            auth()->id() === $document->user_id || auth()->user()?->role === 'admin',
+            403,
+            'Unauthorized access.'
+        );
 
         $docType = strtolower(trim($document->document_type));
         $isAha = str_contains($docType, 'aha') || str_contains($docType, 'activity hazard');
@@ -71,9 +73,11 @@ class DocumentController extends Controller
     {
         $document = SafetyDocument::findOrFail($id);
 
-        if (! $document->is_paid && auth()->id() !== $document->user_id) {
-            abort(403, 'Unauthorized access.');
-        }
+        abort_unless(
+            auth()->id() === $document->user_id || auth()->user()?->role === 'admin',
+            403,
+            'Unauthorized access.'
+        );
 
         $docType = strtolower(trim($document->document_type));
         $isAha = str_contains($docType, 'aha') || str_contains($docType, 'activity hazard');

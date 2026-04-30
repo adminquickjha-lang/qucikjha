@@ -52,9 +52,27 @@
                 fail(({ status, preventDefault }) => {
                     preventDefault();
                     if (status === 419) {
-                        alert('Your session has expired. Please refresh the page and try again.');
+                        Swal.fire({
+                            title: 'Session Expired',
+                            text: 'Your session has expired. Please refresh the page and try again.',
+                            icon: 'warning',
+                            confirmButtonText: 'Refresh Page',
+                            confirmButtonColor: '#0f172a',
+                            borderRadius: '1.5rem'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.reload();
+                            }
+                        });
                     } else {
-                        alert('Server Error (' + status + '): Unable to communicate with the server. Please check your internet connection or contact support.');
+                        Swal.fire({
+                            title: 'Server Error (' + status + ')',
+                            text: 'Unable to communicate with the server. Please check your internet connection or contact support.',
+                            icon: 'error',
+                            confirmButtonText: 'Got it',
+                            confirmButtonColor: '#0f172a',
+                            borderRadius: '1.5rem'
+                        });
                     }
 
                     // Force remove any loading states across the page to unlock UI

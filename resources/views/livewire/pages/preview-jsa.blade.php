@@ -2,12 +2,17 @@
 
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
+use Livewire\WithFileUploads;
 use App\Models\Setting;
 
 new #[Layout('layouts.safety')] class extends Component {
+    use WithFileUploads;
+
     public $id;
     public $paid = false;
     public $project;
+
+    public $newLogo;
 
     public $isEditing = false;
     public $projectName;
@@ -19,6 +24,7 @@ new #[Layout('layouts.safety')] class extends Component {
     public $steps = [];
     public $docs = [];
     public $ppe = [];
+    public $ppeOthers = [];
 
     // Review Feature
     public $showReviewModal = false;
@@ -35,6 +41,12 @@ new #[Layout('layouts.safety')] class extends Component {
     {
         $this->id = $id;
         $this->project = \App\Models\SafetyDocument::findOrFail($id);
+
+        abort_unless(
+            auth()->id() === $this->project->user_id || auth()->user()?->role === 'admin',
+            403
+        );
+
         $this->paid = $this->project->is_paid;
 
         $this->projectName = $this->project->project_name;
@@ -54,8 +66,26 @@ new #[Layout('layouts.safety')] class extends Component {
             // Strip leading "1. " or "1) " style numbering from the string
             $step['step_description'] = preg_replace('/^\d+[\.\)]\s*/', '', $rawStep);
         }
-        $this->docs = $this->project->ai_response['jsa_specifics']['documentation'] ?? [];
-        $this->ppe = $this->project->ai_response['jsa_specifics']['ppe_checklist'] ?? [];
+        $rawDocs = $this->project->ai_response['jsa_specifics']['documentation'] ?? [];
+        $this->docs = [
+            'hot_work_permit' => (bool) ($rawDocs['hot_work_permit'] ?? false),
+            'confined_space_permit' => (bool) ($rawDocs['confined_space_permit'] ?? false),
+            'mewp_permit' => (bool) ($rawDocs['mewp_permit'] ?? false),
+        ];
+
+        $ppeKeys = [
+            'safety_glasses', 'face_shield', 'nitrile_gloves', 'respiratory_protection',
+            'safety_shoes', 'chemical_goggles', 'cut_resistant_gloves', 'hearing_protection',
+            'welding_helmet', 'abrasion_resistant_gloves', 'hard_hat', 'fall_protection', 'leather_gloves',
+        ];
+        $rawPpe = $this->project->ai_response['jsa_specifics']['ppe_checklist'] ?? [];
+        $this->ppe = array_combine($ppeKeys, array_map(fn ($k) => (bool) ($rawPpe[$k] ?? false), $ppeKeys));
+
+        $this->ppeOthers = array_map(
+            fn ($o) => ['label' => $o, 'checked' => true],
+            $this->project->ai_response['jsa_specifics']['ppe_others'] ?? []
+        );
+
         $this->reviewCount = $this->project->ai_response['review_count'] ?? 0;
     }
 
@@ -80,6 +110,9 @@ new #[Layout('layouts.safety')] class extends Component {
         $aiResponse['steps'] = $this->steps;
         $aiResponse['jsa_specifics']['documentation'] = $this->docs;
         $aiResponse['jsa_specifics']['ppe_checklist'] = $this->ppe;
+        $aiResponse['jsa_specifics']['ppe_others'] = array_values(
+            array_map(fn ($o) => $o['label'], array_filter($this->ppeOthers, fn ($o) => $o['checked']))
+        );
 
         $this->project->update([
             'project_name' => $this->projectName,
@@ -93,6 +126,85 @@ new #[Layout('layouts.safety')] class extends Component {
 
         $this->isEditing = false;
         $this->dispatch('swal', ['title' => 'Success!', 'text' => 'Document updated successfully!', 'icon' => 'success']);
+    }
+
+    public function deleteStep(int $index): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        array_splice($this->steps, $index, 1);
+        $this->steps = array_values($this->steps);
+    }
+
+    public function addStep(): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        $this->steps[] = [
+            'step_description' => '',
+            'hazards' => [''],
+            'controls' => [''],
+            'responsibilities' => [''],
+        ];
+    }
+
+    public function addStepItem(int $stepIndex, string $field): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        if (!is_array($this->steps[$stepIndex][$field] ?? null)) {
+            $this->steps[$stepIndex][$field] = [$this->steps[$stepIndex][$field] ?? ''];
+        }
+        $this->steps[$stepIndex][$field][] = '';
+    }
+
+    public function deleteStepItem(int $stepIndex, string $field, int $itemIndex): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        array_splice($this->steps[$stepIndex][$field], $itemIndex, 1);
+        $this->steps[$stepIndex][$field] = array_values($this->steps[$stepIndex][$field]);
+    }
+
+    public function togglePpe(string $key): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        $this->ppe[$key] = !($this->ppe[$key] ?? false);
+    }
+
+    public function toggleDoc(string $key): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        $this->docs[$key] = !($this->docs[$key] ?? false);
+    }
+
+    public function togglePpeOther(int $index): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        $this->ppeOthers[$index]['checked'] = !($this->ppeOthers[$index]['checked'] ?? true);
+    }
+
+    public function updatedNewLogo(): void
+    {
+        $this->validate(['newLogo' => 'image|max:3072']);
+
+        if ($this->project->logo_path) {
+            \Storage::disk('public')->delete($this->project->logo_path);
+        }
+
+        $path = $this->newLogo->store('logos', 'public');
+        $this->project->update(['logo_path' => $path]);
+        $this->newLogo = null;
     }
 
     public function handlePayment($method = null)
@@ -174,6 +286,19 @@ new #[Layout('layouts.safety')] class extends Component {
 
             // Re-mount to refresh everything
             $this->mount($this->id);
+
+            // Save review history
+            $inputTokens = $aiResponse->usage->promptTokens ?? 0;
+            $outputTokens = $aiResponse->usage->completionTokens ?? 0;
+            $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
+
+            \App\Models\DocumentReview::create([
+                'safety_document_id' => $this->id,
+                'prompt' => $this->reviewRequest,
+                'input_tokens' => $inputTokens,
+                'output_tokens' => $outputTokens,
+                'cost' => $cost,
+            ]);
 
             $this->reviewRequest = '';
             $this->showReviewModal = false;
@@ -466,8 +591,6 @@ new #[Layout('layouts.safety')] class extends Component {
 
         @php
             $jsa = $project->ai_response['jsa_specifics'] ?? [];
-            $ppe = $jsa['ppe_checklist'] ?? [];
-            $docs = $jsa['documentation'] ?? [];
             $steps = $this->jhaHazards();
             $jsaTableHeaderColor = \App\Models\Setting::where('key', 'jsa_table_header_color')->value('value') ?? \App\Models\Setting::where('key', 'table_header_color')->value('value') ?? '#2c5f9e';
         @endphp
@@ -494,11 +617,22 @@ new #[Layout('layouts.safety')] class extends Component {
                         }
                     }
                 @endphp
-                @if($logoSrc)
-                    <div class="text-center mb-4">
+                <div class="text-center mb-4">
+                    @if($logoSrc)
                         <img src="{{ $logoSrc }}" alt="Company Logo" class="max-h-32 mx-auto object-contain" />
-                    </div>
-                @endif
+                    @endif
+                    @if($isEditing)
+                        <div class="mt-2 print:hidden">
+                            <label class="cursor-pointer inline-flex items-center gap-2 text-xs font-bold text-primary border border-primary rounded-lg px-3 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                {{ $logoSrc ? 'Change Logo' : 'Upload Logo' }}
+                                <input type="file" wire:model="newLogo" accept="image/*" class="hidden">
+                            </label>
+                            <div wire:loading wire:target="newLogo" class="text-xs text-gray-500 mt-1">Uploading...</div>
+                            @error('newLogo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                        </div>
+                    @endif
+                </div>
 
                 {{-- Title Section --}}
                 <div class="text-left mb-6">
@@ -571,30 +705,13 @@ new #[Layout('layouts.safety')] class extends Component {
                     <div class="col-span-3 p-2">
                         <span class="text-[12px] font-bold block uppercase mb-1">Required Documentation:</span>
                         <div class="flex items-center gap-6">
-                            <div class="flex items-center gap-2">
-                                <span
-                                    class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer"
-                                    @if($isEditing)
-                                        wire:click="$set('docs.hot_work_permit', !{{ ($docs['hot_work_permit'] ?? false) ? 'true' : 'false' }})"
-                                    @endif>{!! ($docs['hot_work_permit'] ?? false) ? '&#10003;' : '' !!}</span>
-                                <span class="text-[12px]">Hot Work Permit</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span
-                                    class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer"
-                                    @if($isEditing)
-                                        wire:click="$set('docs.confined_space_permit', !{{ ($docs['confined_space_permit'] ?? false) ? 'true' : 'false' }})"
-                                    @endif>{!! ($docs['confined_space_permit'] ?? false) ? '&#10003;' : '' !!}</span>
-                                <span class="text-[12px]">Confined Space Permit</span>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span
-                                    class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer"
-                                    @if($isEditing)
-                                        wire:click="$set('docs.mewp_permit', !{{ ($docs['mewp_permit'] ?? false) ? 'true' : 'false' }})"
-                                    @endif>{!! ($docs['mewp_permit'] ?? false) ? '&#10003;' : '' !!}</span>
-                                <span class="text-[12px]">MEWP Permit</span>
-                            </div>
+                            @foreach(['hot_work_permit' => 'Hot Work Permit', 'confined_space_permit' => 'Confined Space Permit', 'mewp_permit' => 'MEWP Permit'] as $docKey => $docLabel)
+                                <div class="flex items-center gap-2 {{ $isEditing ? 'cursor-pointer select-none' : '' }}"
+                                    @if($isEditing) wire:click="toggleDoc('{{ $docKey }}')" @endif>
+                                    <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none {{ $isEditing ? 'hover:bg-blue-50' : '' }}">{!! ($docs[$docKey] ?? false) ? '&#10003;' : '' !!}</span>
+                                    <span class="text-[12px]">{{ $docLabel }}</span>
+                                </div>
+                            @endforeach
                         </div>
                     </div>
                 </div>
@@ -623,20 +740,17 @@ new #[Layout('layouts.safety')] class extends Component {
                             ];
                         @endphp
                         @foreach($ppeItems as $key => $label)
-                            <div class="flex items-center gap-2">
-                                <span
-                                    class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none cursor-pointer"
-                                    @if($isEditing)
-                                        wire:click="$set('ppe.{{ $key }}', !{{ ($ppe[$key] ?? false) ? 'true' : 'false' }})"
-                                    @endif>{!! ($ppe[$key] ?? false) ? '&#10003;' : '' !!}</span>
+                            <div class="flex items-center gap-2 {{ $isEditing ? 'cursor-pointer select-none' : '' }}"
+                                @if($isEditing) wire:click="togglePpe('{{ $key }}')" @endif>
+                                <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none {{ $isEditing ? 'hover:bg-blue-50' : '' }}">{!! ($ppe[$key] ?? false) ? '&#10003;' : '' !!}</span>
                                 <span class="text-[12px]">{{ $label }}</span>
                             </div>
                         @endforeach
-                        @foreach($jsa['ppe_others'] ?? [] as $other)
-                            <div class="flex items-center gap-2">
-                                <span
-                                    class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none">&#10003;</span>
-                                <span class="text-[12px]">{{ $other }}</span>
+                        @foreach($ppeOthers as $oi => $other)
+                            <div class="flex items-center gap-2 {{ $isEditing ? 'cursor-pointer select-none' : '' }}"
+                                @if($isEditing) wire:click="togglePpeOther({{ $oi }})" @endif>
+                                <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none {{ $isEditing ? 'hover:bg-blue-50' : '' }}">{!! $other['checked'] ? '&#10003;' : '' !!}</span>
+                                <span class="text-[12px]">{{ $other['label'] }}</span>
                             </div>
                         @endforeach
                     </div>
@@ -651,6 +765,9 @@ new #[Layout('layouts.safety')] class extends Component {
                             <th class="border border-black p-3 w-[30%] font-black">Potential Hazards</th>
                             <th class="border border-black p-3 w-[30%] font-black">Controls</th>
                             <th class="border border-black p-3 w-[15%] font-black">Responsibility</th>
+                            @if($isEditing)
+                                <th class="border border-black p-2 w-10 print:hidden"></th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody class="text-[14px]">
@@ -669,14 +786,23 @@ new #[Layout('layouts.safety')] class extends Component {
                                 <td class="border border-black p-4 align-top">
                                     @if($isEditing)
                                         @if(is_array($step['hazards']))
-                                            <ol class="list-decimal ml-6 space-y-2">
+                                            <ol class="list-decimal ml-4 space-y-2">
                                                 @foreach($step['hazards'] as $hj => $hazard)
-                                                    <li>
+                                                    <li class="flex items-center gap-1">
                                                         <input type="text" wire:model="steps.{{ $i }}.hazards.{{ $hj }}"
-                                                            class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                            class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                        <button wire:click="deleteStepItem({{ $i }}, 'hazards', {{ $hj }})" type="button"
+                                                            class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                        </button>
                                                     </li>
                                                 @endforeach
                                             </ol>
+                                            <button wire:click="addStepItem({{ $i }}, 'hazards')" type="button"
+                                                class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                                Add
+                                            </button>
                                         @else
                                             <textarea wire:model="steps.{{ $i }}.hazards"
                                                 class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none"
@@ -697,14 +823,23 @@ new #[Layout('layouts.safety')] class extends Component {
                                 <td class="border border-black p-4 align-top">
                                     @if($isEditing)
                                         @if(is_array($step['controls']))
-                                            <ol class="list-decimal ml-6 space-y-2">
+                                            <ol class="list-decimal ml-4 space-y-2">
                                                 @foreach($step['controls'] as $hc => $control)
-                                                    <li>
+                                                    <li class="flex items-center gap-1">
                                                         <input type="text" wire:model="steps.{{ $i }}.controls.{{ $hc }}"
-                                                            class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                            class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                        <button wire:click="deleteStepItem({{ $i }}, 'controls', {{ $hc }})" type="button"
+                                                            class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                        </button>
                                                     </li>
                                                 @endforeach
                                             </ol>
+                                            <button wire:click="addStepItem({{ $i }}, 'controls')" type="button"
+                                                class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                                Add
+                                            </button>
                                         @else
                                             <textarea wire:model="steps.{{ $i }}.controls"
                                                 class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none"
@@ -726,14 +861,23 @@ new #[Layout('layouts.safety')] class extends Component {
                                     @if($isEditing)
                                         @php $resp = $step['responsibilities'] ?? $step['responsibility'] ?? ['Site Supervisor']; @endphp
                                         @if(is_array($resp))
-                                            <ol class="list-decimal ml-6 space-y-2">
+                                            <ol class="list-decimal ml-4 space-y-2">
                                                 @foreach($resp as $hr => $r)
-                                                    <li>
+                                                    <li class="flex items-center gap-1">
                                                         <input type="text" wire:model="steps.{{ $i }}.responsibilities.{{ $hr }}"
-                                                            class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                            class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                        <button wire:click="deleteStepItem({{ $i }}, 'responsibilities', {{ $hr }})" type="button"
+                                                            class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                        </button>
                                                     </li>
                                                 @endforeach
                                             </ol>
+                                            <button wire:click="addStepItem({{ $i }}, 'responsibilities')" type="button"
+                                                class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                                Add
+                                            </button>
                                         @else
                                             <textarea wire:model="steps.{{ $i }}.responsibilities"
                                                 class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none"
@@ -751,10 +895,25 @@ new #[Layout('layouts.safety')] class extends Component {
                                         @endif
                                     @endif
                                 </td>
+                                @if($isEditing)
+                                    <td class="border border-black p-2 align-top print:hidden">
+                                        <button wire:click="deleteStep({{ $i }})" type="button"
+                                            class="text-red-400 hover:text-red-600 mt-1">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                        </button>
+                                    </td>
+                                @endif
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
+                @if($isEditing)
+                    <button wire:click="addStep" type="button"
+                        class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                        Add Step
+                    </button>
+                @endif
 
                 {{-- Toolbox Talk Section --}}
                 <div class="mt-16 page-break-before">
@@ -799,6 +958,96 @@ new #[Layout('layouts.safety')] class extends Component {
                 </div>
 
             </div>
+
+            {{-- Usage & History Section (Visible ONLY to Admin) --}}
+            @if(auth()->check() && auth()->user()->role === 'admin')
+            <div class="mt-12 bg-white rounded-3xl p-8 shadow-sm border border-slate-200/60 ring-1 ring-slate-100 print:hidden">
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10l4.5 4.5"/><circle cx="12" cy="12" r="10"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-black text-slate-900 tracking-tight">Usage & Review History</h3>
+                            <p class="text-sm text-slate-500 font-medium italic">Track your AI token consumption and document iterations.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-6 text-right">
+                        <div>
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Tokens Spent</span>
+                            <div class="text-xl font-bold text-slate-700">{{ number_format($project->total_tokens) }}</div>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Document Spend</span>
+                            <div class="text-2xl font-black text-purple-600">${{ number_format($project->total_ai_cost, 4) }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    {{-- Initial Generation --}}
+                    <div class="flex gap-6 p-6 bg-slate-50/50 rounded-2xl border border-slate-100 transition-all hover:border-purple-200 group">
+                        <div class="flex-shrink-0 w-1 bg-purple-200 rounded-full group-hover:bg-purple-500 transition-colors"></div>
+                        <div class="flex-grow">
+                            <div class="flex justify-between items-start mb-2">
+                                <h4 class="font-black text-slate-900 uppercase tracking-tight text-sm italic">Initial Document Generation</h4>
+                                <span class="text-[10px] font-bold text-slate-400">{{ $project->created_at->format('M d, Y H:i') }}</span>
+                            </div>
+                            <div class="flex gap-8">
+                                <div>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
+                                    <span class="text-sm font-bold text-slate-700">{{ number_format($project->input_tokens) }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
+                                    <span class="text-sm font-bold text-slate-700">{{ number_format($project->output_tokens) }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cost</span>
+                                    <span class="text-sm font-black text-purple-600">${{ number_format($project->cost, 4) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Automated Reviews History --}}
+                    @foreach($project->reviews()->latest()->get() as $idx => $review)
+                        <div class="flex gap-6 p-6 bg-white rounded-2xl border border-slate-100 transition-all hover:border-blue-200 group relative overflow-hidden">
+                            <div class="absolute top-0 right-0 p-3 bg-blue-50 text-blue-400 font-black text-[10px] uppercase tracking-widest rounded-bl-xl">Review #{{ $project->reviews()->count() - $idx }}</div>
+                            <div class="flex-shrink-0 w-1 bg-blue-200 rounded-full group-hover:bg-blue-500 transition-colors"></div>
+                            <div class="flex-grow">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div>
+                                        <h4 class="font-black text-slate-900 uppercase tracking-tight text-sm italic mb-1">AI Automated Review</h4>
+                                        <p class="text-xs text-slate-600 font-medium bg-slate-50 p-3 rounded-xl border border-slate-100 ring-1 ring-slate-200/50 mt-2">
+                                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 opacity-60">Request:</span>
+                                            "{{ $review->prompt }}"
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-8 mt-4 pt-4 border-t border-slate-100">
+                                    <div>
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
+                                        <span class="text-sm font-bold text-slate-700">{{ number_format($review->input_tokens) }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
+                                        <span class="text-sm font-bold text-slate-700">{{ number_format($review->output_tokens) }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cost</span>
+                                        <span class="text-sm font-black text-blue-600">${{ number_format($review->cost, 4) }}</span>
+                                    </div>
+                                    <div class="ml-auto text-right">
+                                        <span class="text-[10px] font-bold text-slate-400">{{ $review->created_at->format('M d, Y H:i') }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
         </div>
     </div>
     <!-- Payment Modal -->

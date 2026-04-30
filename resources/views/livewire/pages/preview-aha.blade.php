@@ -2,12 +2,17 @@
 
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
+use Livewire\WithFileUploads;
 use App\Models\Setting;
 
 new #[Layout('layouts.safety')] class extends Component {
+    use WithFileUploads;
+
     public $id;
     public $paid = false;
     public $project;
+
+    public $newLogo;
 
     public $isEditing = false;
     public $projectName;
@@ -34,6 +39,12 @@ new #[Layout('layouts.safety')] class extends Component {
     {
         $this->id = $id;
         $this->project = \App\Models\SafetyDocument::findOrFail($id);
+
+        abort_unless(
+            auth()->id() === $this->project->user_id || auth()->user()?->role === 'admin',
+            403
+        );
+
         $this->paid = $this->project->is_paid;
 
         $this->projectName = $this->project->project_name;
@@ -52,7 +63,46 @@ new #[Layout('layouts.safety')] class extends Component {
             $step['step_description'] = preg_replace('/^\d+[\.\)]\s*/', '', $rawStep);
         }
 
-        $this->hazardsChecklist = $this->project->ai_response['hazards_checklist'] ?? [];
+        $staticQuestions = [
+            'Can someone be struck or contacted by anything while doing this job?',
+            'Can someone strike against or make contact with any physical hazards?',
+            'Can someone be exposed to any hazardous conditions?',
+            'Can someone slip, trip or fall?',
+            'Can someone strain or overexert?',
+            'Can someone be caught in anything?',
+            'Can someone fall into anything?',
+            'Can damage to equipment occur?',
+            'Can someone injure someone else?',
+        ];
+        $aiChecklist = $this->project->ai_response['hazards_checklist'] ?? [];
+        $firstItem = !empty($aiChecklist) ? array_values($aiChecklist)[0] : null;
+
+        if ($firstItem !== null && is_bool($firstItem)) {
+            $this->hazardsChecklist = array_values(array_slice($aiChecklist, 0, 9));
+            while (count($this->hazardsChecklist) < 9) {
+                $this->hazardsChecklist[] = false;
+            }
+        } else {
+            $checkedQuestions = [];
+            foreach ($aiChecklist as $item) {
+                if (is_array($item) && isset($item['question'])) {
+                    if ($item['checked'] ?? false) {
+                        $checkedQuestions[] = trim($item['question']);
+                    }
+                } elseif (is_string($item)) {
+                    $checkedQuestions[] = trim($item);
+                }
+            }
+            $this->hazardsChecklist = array_values(array_map(function ($q) use ($checkedQuestions) {
+                foreach ($checkedQuestions as $cq) {
+                    if (stripos($q, $cq) !== false || stripos($cq, $q) !== false) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }, $staticQuestions));
+        }
         $this->reviewCount = $this->project->ai_response['review_count'] ?? 0;
     }
 
@@ -75,7 +125,23 @@ new #[Layout('layouts.safety')] class extends Component {
 
         $aiResponse = $this->project->ai_response;
         $aiResponse['steps'] = $this->steps;
-        $aiResponse['hazards_checklist'] = $this->hazardsChecklist;
+
+        $checklistQuestions = [
+            'Can someone be struck or contacted by anything while doing this job?',
+            'Can someone strike against or make contact with any physical hazards?',
+            'Can someone be exposed to any hazardous conditions?',
+            'Can someone slip, trip or fall?',
+            'Can someone strain or overexert?',
+            'Can someone be caught in anything?',
+            'Can someone fall into anything?',
+            'Can damage to equipment occur?',
+            'Can someone injure someone else?',
+        ];
+        $aiResponse['hazards_checklist'] = array_map(
+            fn ($q, $i) => ['question' => $q, 'checked' => (bool) ($this->hazardsChecklist[$i] ?? false)],
+            $checklistQuestions,
+            array_keys($checklistQuestions)
+        );
 
         $this->project->update([
             'project_name' => $this->projectName,
@@ -88,7 +154,70 @@ new #[Layout('layouts.safety')] class extends Component {
         ]);
 
         $this->isEditing = false;
-        $this->dispatch('notify', ['message' => 'Document updated successfully!', 'type' => 'success']);
+        $this->dispatch('swal', ['title' => 'Saved!', 'text' => 'Document updated successfully!', 'icon' => 'success']);
+    }
+
+    public function deleteStep(int $index): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        array_splice($this->steps, $index, 1);
+        $this->steps = array_values($this->steps);
+    }
+
+    public function addStep(): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        $this->steps[] = [
+            'step_description' => '',
+            'hazards' => [''],
+            'controls' => [''],
+            'rac' => 'M',
+        ];
+    }
+
+    public function addStepItem(int $stepIndex, string $field): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        if (!is_array($this->steps[$stepIndex][$field] ?? null)) {
+            $this->steps[$stepIndex][$field] = [$this->steps[$stepIndex][$field] ?? ''];
+        }
+        $this->steps[$stepIndex][$field][] = '';
+    }
+
+    public function deleteStepItem(int $stepIndex, string $field, int $itemIndex): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        array_splice($this->steps[$stepIndex][$field], $itemIndex, 1);
+        $this->steps[$stepIndex][$field] = array_values($this->steps[$stepIndex][$field]);
+    }
+
+    public function toggleHazard(int $index): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        $this->hazardsChecklist[$index] = !($this->hazardsChecklist[$index] ?? false);
+    }
+
+    public function updatedNewLogo(): void
+    {
+        $this->validate(['newLogo' => 'image|max:3072']);
+
+        if ($this->project->logo_path) {
+            \Storage::disk('public')->delete($this->project->logo_path);
+        }
+
+        $path = $this->newLogo->store('logos', 'public');
+        $this->project->update(['logo_path' => $path]);
+        $this->newLogo = null;
     }
 
     public function handlePayment($method = null)
@@ -170,6 +299,19 @@ new #[Layout('layouts.safety')] class extends Component {
 
             // Re-mount to refresh everything
             $this->mount($this->id);
+
+            // Save review history
+            $inputTokens = $aiResponse->usage->promptTokens ?? 0;
+            $outputTokens = $aiResponse->usage->completionTokens ?? 0;
+            $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
+
+            \App\Models\DocumentReview::create([
+                'safety_document_id' => $this->id,
+                'prompt' => $this->reviewRequest,
+                'input_tokens' => $inputTokens,
+                'output_tokens' => $outputTokens,
+                'cost' => $cost,
+            ]);
 
             $this->reviewRequest = '';
             $this->showReviewModal = false;
@@ -412,7 +554,7 @@ new #[Layout('layouts.safety')] class extends Component {
             {{-- Refined Standardized JHA Header --}}
             <div class="bg-white p-4">
                 {{-- Logo Section --}}
-                <div class="flex justify-center mb-6">
+                <div class="flex flex-col items-center mb-6">
                     @php
                         $logoSrc = '';
                         $customLogoPath = $project->logo_path;
@@ -433,6 +575,17 @@ new #[Layout('layouts.safety')] class extends Component {
                     @endphp
                     @if($logoSrc)
                         <img src="{{ $logoSrc }}" class="max-h-20 w-auto object-contain" alt="Logo" />
+                    @endif
+                    @if($isEditing)
+                        <div class="mt-2 print:hidden">
+                            <label class="cursor-pointer inline-flex items-center gap-2 text-xs font-bold text-primary border border-primary rounded-lg px-3 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                {{ $logoSrc ? 'Change Logo' : 'Upload Logo' }}
+                                <input type="file" wire:model="newLogo" accept="image/*" class="hidden">
+                            </label>
+                            <div wire:loading wire:target="newLogo" class="text-xs text-gray-500 mt-1">Uploading...</div>
+                            @error('newLogo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                        </div>
                     @endif
                 </div>
 
@@ -641,86 +794,118 @@ on AHA. </p>
                             <th class="px-3 py-3 border border-gray-400 text-center w-64 text-[16px]">Hazards</th>
                             <th class="px-3 py-3 border border-gray-400 text-center text-[16px]">Risk Controls</th>
                             <th class="px-3 py-3 border border-gray-400 text-center w-16 text-[16px]">RAC</th>
+                            @if($isEditing)
+                                <th class="px-2 py-3 border border-gray-400 w-10 print:hidden"></th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($steps as $i => $h)
                             <tr class="bg-white" wire:key="step-{{ $i }}">
                                 <td class="px-3 py-3 border border-gray-300 font-bold text-gray-900 align-top">
-                                    {{ $i + 1 }}. 
+                                    {{ $i + 1 }}.
                                     @if($isEditing)
                                         <textarea wire:model="steps.{{ $i }}.step_description" class="w-full border-0 p-0 focus:ring-0 font-bold bg-transparent resize-none" rows="3"></textarea>
                                     @else
                                         {{ preg_replace('/^(?:Step\s*\d+[\.\:\-\s]*|\d+[\.\-\s]+)+/i', '', $h['step_description'] ?? $h['step'] ?? 'N/A') }}
                                     @endif
                                 </td>
-                                                    <td class="px-3 py-3 border border-gray-300 align-top text-black">
-                                                        @if($isEditing)
-                                                            @if(is_array($h['hazards']))
-                                                                <ol class="list-decimal ml-6 space-y-2">
-                                                                    @foreach($h['hazards'] as $hj => $hazard)
-                                                                        <li>
-                                                                            <input type="text" wire:model="steps.{{ $i }}.hazards.{{ $hj }}" class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
-                                                                        </li>
-                                                                    @endforeach
-                                                                </ol>
-                                                            @else
-                                                                <textarea wire:model="steps.{{ $i }}.hazards" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
-                                                            @endif
-                                                        @else
-                                                            @if(is_array($h['hazards']))
-                                                                <ol class="list-decimal ml-3 space-y-2">@foreach($h['hazards'] as $hazard)<li>{{ $hazard }}</li>@endforeach</ol>
-                                                            @else {!! nl2br(e($h['hazards'] ?? $h['hazard'] ?? 'N/A')) !!} @endif
-                                                        @endif
-                                                    </td>
-                                                    <td class="px-3 py-3 border border-gray-300 align-top text-black">
-                                                        @if($isEditing)
-                                                            @if(is_array($h['controls']))
-                                                                <ol class="list-decimal ml-6 space-y-2">
-                                                                    @foreach($h['controls'] as $hc => $control)
-                                                                        <li>
-                                                                            <input type="text" wire:model="steps.{{ $i }}.controls.{{ $hc }}" class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
-                                                                        </li>
-                                                                    @endforeach
-                                                                </ol>
-                                                            @else
-                                                                <textarea wire:model="steps.{{ $i }}.controls" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
-                                                            @endif
-                                                        @else
-                                                            @if(is_array($h['controls']))
-                                                                <ol class="list-decimal ml-3 space-y-2">@foreach($h['controls'] as $control)<li>{{ $control }}</li>@endforeach</ol>
-                                                            @else {!! nl2br(e($h['controls'] ?? $h['control'] ?? 'N/A')) !!} @endif
-                                                        @endif
-                                                </td>
-                                            @php 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   $rac = $h['rac'] ?? $h['risk'] ?? 'N/A';
-                                                if (is_array($rac)) {
-                                                    $racChar = strtoupper(substr((string) ($rac[0] ?? 'N/A'), 0, 1));
-                                                    $racDisp = implode(', ', $rac);
-                                                } else {
-                                                    $racChar = strtoupper(substr((string) $rac, 0, 1));
-                                                    $racDisp = $rac;
-                                                }
-                                                $racColor = $racColors[$racChar] ?? $racColors[$rac] ?? '#9ca3af';
-                                                $textColor = in_array($racChar, ['M', 'L']) && $racColor == '#f1c40f' ? '#000' : (in_array($racChar, ['M']) ? '#000' : '#fff');
-                                            @endphp
-                                                    <td class="border border-gray-300 text-center align-middle font-black text-[14px]" style="background-color: {{ $racColor }}; color: {{ $textColor }}; width: 56px;">
-                                                        @if($isEditing)
-                                                            <select wire:model="steps.{{ $i }}.rac" class="bg-transparent border-0 p-0 font-black focus:ring-0 text-center">
-                                                                <option value="L">L</option>
-                                                                <option value="M">M</option>
-                                                                <option value="H">H</option>
-                                                                <option value="E">E</option>
-                                                            </select>
-                                                        @else
-                                                            {{ $racDisp }}
-                                                        @endif
-                                                    </td>
-                                                </tr>
+                                <td class="px-3 py-3 border border-gray-300 align-top text-black">
+                                    @if($isEditing)
+                                        @if(is_array($h['hazards']))
+                                            <ol class="list-decimal ml-4 space-y-2">
+                                                @foreach($h['hazards'] as $hj => $hazard)
+                                                    <li class="flex items-center gap-1">
+                                                        <input type="text" wire:model="steps.{{ $i }}.hazards.{{ $hj }}" class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                        <button wire:click="deleteStepItem({{ $i }}, 'hazards', {{ $hj }})" type="button" class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                        </button>
+                                                    </li>
+                                                @endforeach
+                                            </ol>
+                                            <button wire:click="addStepItem({{ $i }}, 'hazards')" type="button" class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                                Add
+                                            </button>
+                                        @else
+                                            <textarea wire:model="steps.{{ $i }}.hazards" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
+                                        @endif
+                                    @else
+                                        @if(is_array($h['hazards']))
+                                            <ol class="list-decimal ml-3 space-y-2">@foreach($h['hazards'] as $hazard)<li>{{ $hazard }}</li>@endforeach</ol>
+                                        @else {!! nl2br(e($h['hazards'] ?? $h['hazard'] ?? 'N/A')) !!} @endif
+                                    @endif
+                                </td>
+                                <td class="px-3 py-3 border border-gray-300 align-top text-black">
+                                    @if($isEditing)
+                                        @if(is_array($h['controls']))
+                                            <ol class="list-decimal ml-4 space-y-2">
+                                                @foreach($h['controls'] as $hc => $control)
+                                                    <li class="flex items-center gap-1">
+                                                        <input type="text" wire:model="steps.{{ $i }}.controls.{{ $hc }}" class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                        <button wire:click="deleteStepItem({{ $i }}, 'controls', {{ $hc }})" type="button" class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                        </button>
+                                                    </li>
+                                                @endforeach
+                                            </ol>
+                                            <button wire:click="addStepItem({{ $i }}, 'controls')" type="button" class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                                Add
+                                            </button>
+                                        @else
+                                            <textarea wire:model="steps.{{ $i }}.controls" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
+                                        @endif
+                                    @else
+                                        @if(is_array($h['controls']))
+                                            <ol class="list-decimal ml-3 space-y-2">@foreach($h['controls'] as $control)<li>{{ $control }}</li>@endforeach</ol>
+                                        @else {!! nl2br(e($h['controls'] ?? $h['control'] ?? 'N/A')) !!} @endif
+                                    @endif
+                                </td>
+                                @php
+                                    $rac = $h['rac'] ?? $h['risk'] ?? 'N/A';
+                                    if (is_array($rac)) {
+                                        $racChar = strtoupper(substr((string) ($rac[0] ?? 'N/A'), 0, 1));
+                                        $racDisp = implode(', ', $rac);
+                                    } else {
+                                        $racChar = strtoupper(substr((string) $rac, 0, 1));
+                                        $racDisp = $rac;
+                                    }
+                                    $racColor = $racColors[$racChar] ?? $racColors[$rac] ?? '#9ca3af';
+                                    $textColor = in_array($racChar, ['M', 'L']) && $racColor == '#f1c40f' ? '#000' : (in_array($racChar, ['M']) ? '#000' : '#fff');
+                                @endphp
+                                <td class="border border-gray-300 text-center align-middle font-black text-[14px]" style="background-color: {{ $isEditing ? '#fff' : $racColor }}; color: {{ $isEditing ? '#000' : $textColor }}; width: 70px;">
+                                    @if($isEditing)
+                                        <select wire:model.live="steps.{{ $i }}.rac"
+                                            class="w-full text-sm font-bold border border-gray-400 rounded px-1 py-1.5 focus:ring-1 focus:ring-blue-500 bg-white text-black cursor-pointer">
+                                            <option value="E" style="background:#c0392b;color:#fff;">E — Extreme</option>
+                                            <option value="H" style="background:#e67e22;color:#fff;">H — High</option>
+                                            <option value="M" style="background:#f1c40f;color:#000;">M — Medium</option>
+                                            <option value="L" style="background:#27ae60;color:#fff;">L — Low</option>
+                                        </select>
+                                    @else
+                                        {{ $racDisp }}
+                                    @endif
+                                </td>
+                                @if($isEditing)
+                                    <td class="border border-gray-300 p-2 align-top print:hidden">
+                                        <button wire:click="deleteStep({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                        </button>
+                                    </td>
+                                @endif
+                            </tr>
                         @endforeach
                     </tbody>
                 </table>
             </div>
+            @if($isEditing)
+                <button wire:click="addStep" type="button"
+                    class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    Add Step
+                </button>
+            @endif
 
             {{-- Hazards Checklist --}}
             @php
@@ -733,39 +918,9 @@ on AHA. </p>
                     'Can someone be caught in anything?',
                     'Can someone fall into anything?',
                     'Can damage to equipment occur?',
-                    'Can someone injure someone else?'
+                    'Can someone injure someone else?',
                 ];
-
-                $aiChecklist = $project->ai_response['hazards_checklist'] ?? [];
-
-                // Create a lookup for checked questions
-                // Handle both new array of objects and old array of strings
-                $checkedQuestions = [];
-                foreach ($aiChecklist as $item) {
-                    if (is_array($item) && isset($item['question'])) {
-                        if ($item['checked'] ?? false) {
-                            $checkedQuestions[] = trim($item['question']);
-                        }
-                    } elseif (is_string($item)) {
-                        $checkedQuestions[] = trim($item);
-                    }
-                }
-
-                $checklistData = array_map(function ($q) use ($checkedQuestions) {
-                    $isTableChecked = false;
-                    foreach ($checkedQuestions as $cq) {
-                        if (stripos($q, $cq) !== false || stripos($cq, $q) !== false) {
-                            $isTableChecked = true;
-                            break;
-                        }
-                    }
-                    return [
-                        'question' => $q,
-                        'checked' => $isTableChecked
-                    ];
-                }, $staticQuestions);
-
-                $chunks = array_chunk($checklistData, 3);
+                $questionIndexedChunks = array_chunk(array_keys($staticQuestions), 3);
             @endphp
             <table class="w-full border-collapse mt-6" style="border: 1px solid #000;">
                 <thead>
@@ -775,16 +930,17 @@ on AHA. </p>
                 </thead>
                 <tbody class="text-[11px]">
                     <tr>
-                        @foreach($chunks as $chunk)
+                        @foreach($questionIndexedChunks as $chunk)
                             <td class="border border-black p-2 w-1/3 align-top">
                                 <ul class="list-none m-0 p-0 space-y-1">
-                                    @foreach($chunk as $ci => $item)
-                                        <li class="flex items-start gap-2">
-                                            <span class="font-bold text-[18px] leading-none text-black cursor-pointer" @if($isEditing) wire:click="$set('hazardsChecklist.{{ $ci + (floor($loop->parent->index / 1)) * 3 }}', !{{ $item['checked'] ? 'true' : 'false' }})" @endif>
-                                                {!! $item['checked'] ? '☑' : '☐' !!}
+                                    @foreach($chunk as $qi)
+                                        <li class="flex items-start gap-2 {{ $isEditing ? 'cursor-pointer select-none' : '' }}"
+                                            @if($isEditing) wire:click="toggleHazard({{ $qi }})" @endif>
+                                            <span class="font-bold text-[18px] leading-none text-black flex-shrink-0">
+                                                {!! ($hazardsChecklist[$qi] ?? false) ? '☑' : '☐' !!}
                                             </span>
-                                            <span class="text-black {{ $item['checked'] ? 'font-bold' : '' }}">
-                                                {{ $item['question'] }}
+                                            <span class="text-black {{ ($hazardsChecklist[$qi] ?? false) ? 'font-bold' : '' }}">
+                                                {{ $staticQuestions[$qi] }}
                                             </span>
                                         </li>
                                     @endforeach
@@ -819,7 +975,98 @@ on AHA. </p>
 
 
             </div>
+
+            {{-- Usage & History Section (Visible ONLY to Admin) --}}
+            @if(auth()->check() && auth()->user()->role === 'admin')
+            <div class="mt-12 bg-white rounded-3xl p-8 shadow-sm border border-slate-200/60 ring-1 ring-slate-100 print:hidden">
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10l4.5 4.5"/><circle cx="12" cy="12" r="10"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-black text-slate-900 tracking-tight">Usage & Review History</h3>
+                            <p class="text-sm text-slate-500 font-medium italic">Track your AI token consumption and document iterations.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-6 text-right">
+                        <div>
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Tokens Spent</span>
+                            <div class="text-xl font-bold text-slate-700">{{ number_format($project->total_tokens) }}</div>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Document Spend</span>
+                            <div class="text-2xl font-black text-purple-600">${{ number_format($project->total_ai_cost, 4) }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    {{-- Initial Generation --}}
+                    <div class="flex gap-6 p-6 bg-slate-50/50 rounded-2xl border border-slate-100 transition-all hover:border-purple-200 group">
+                        <div class="flex-shrink-0 w-1 bg-purple-200 rounded-full group-hover:bg-purple-500 transition-colors"></div>
+                        <div class="flex-grow">
+                            <div class="flex justify-between items-start mb-2">
+                                <h4 class="font-black text-slate-900 uppercase tracking-tight text-sm italic">Initial Document Generation</h4>
+                                <span class="text-[10px] font-bold text-slate-400">{{ $project->created_at->format('M d, Y H:i') }}</span>
+                            </div>
+                            <div class="flex gap-8">
+                                <div>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
+                                    <span class="text-sm font-bold text-slate-700">{{ number_format($project->input_tokens) }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
+                                    <span class="text-sm font-bold text-slate-700">{{ number_format($project->output_tokens) }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cost</span>
+                                    <span class="text-sm font-black text-purple-600">${{ number_format($project->cost, 4) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Automated Reviews History --}}
+                    @foreach($project->reviews()->latest()->get() as $idx => $review)
+                        <div class="flex gap-6 p-6 bg-white rounded-2xl border border-slate-100 transition-all hover:border-blue-200 group relative overflow-hidden">
+                            <div class="absolute top-0 right-0 p-3 bg-blue-50 text-blue-400 font-black text-[10px] uppercase tracking-widest rounded-bl-xl">Review #{{ $project->reviews()->count() - $idx }}</div>
+                            <div class="flex-shrink-0 w-1 bg-blue-200 rounded-full group-hover:bg-blue-500 transition-colors"></div>
+                            <div class="flex-grow">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div>
+                                        <h4 class="font-black text-slate-900 uppercase tracking-tight text-sm italic mb-1">AI Automated Review</h4>
+                                        <p class="text-xs text-slate-600 font-medium bg-slate-50 p-3 rounded-xl border border-slate-100 ring-1 ring-slate-200/50 mt-2">
+                                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 opacity-60">Request:</span>
+                                            "{{ $review->prompt }}"
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-8 mt-4 pt-4 border-t border-slate-100">
+                                    <div>
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
+                                        <span class="text-sm font-bold text-slate-700">{{ number_format($review->input_tokens) }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
+                                        <span class="text-sm font-bold text-slate-700">{{ number_format($review->output_tokens) }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cost</span>
+                                        <span class="text-sm font-black text-blue-600">${{ number_format($review->cost, 4) }}</span>
+                                    </div>
+                                    <div class="ml-auto text-right">
+                                        <span class="text-[10px] font-bold text-slate-400">{{ $review->created_at->format('M d, Y H:i') }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
         </div>
+
     @if($showReviewModal)
         <div 
             x-data="{ show: @entangle('showReviewModal') }"

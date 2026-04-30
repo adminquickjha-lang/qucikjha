@@ -210,9 +210,16 @@ new #[Layout('layouts.safety')] class extends Component {
                 $decoded = json_decode($content, true);
 
                 if ($decoded) {
+                    $inputTokens = $aiResponse->usage->promptTokens ?? 0;
+                    $outputTokens = $aiResponse->usage->completionTokens ?? 0;
+                    $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
+
                     $updates = [
                         'ai_response' => $decoded,
-                        'download_ready' => true
+                        'download_ready' => true,
+                        'input_tokens' => $inputTokens,
+                        'output_tokens' => $outputTokens,
+                        'cost' => $cost,
                     ];
 
                     // Always update with the AI-optimized/combined summary if available
@@ -595,105 +602,7 @@ new #[Layout('layouts.safety')] class extends Component {
         </div>
     </form>
 
-    {{-- Document Generation Progress Overlay --}}
-    <div x-data="{
-            progress: 0,
-            msgIdx: 0,
-            messages: [
-                'Analyzing project details...',
-                'Identifying workplace hazards...',
-                'Creating safety controls...',
-                'Assessing risk levels...',
-                'Reviewing compliance standards...',
-                'Compiling document structure...',
-                'Finalizing your document...'
-            ],
-            timer: null,
-            msgTimer: null,
-            startProgress() {
-                this.progress = 0;
-                this.msgIdx = 0;
-                clearInterval(this.timer);
-                clearInterval(this.msgTimer);
-                this.timer = setInterval(() => {
-                    if (this.progress < 88) {
-                        const rem = 88 - this.progress;
-                        this.progress = Math.min(88, this.progress + Math.max(0.35, rem * 0.016));
-                    }
-                }, 300);
-                this.msgTimer = setInterval(() => {
-                    this.msgIdx = (this.msgIdx + 1) % this.messages.length;
-                }, 3500);
-            },
-            completeProgress(redirectUrl) {
-                clearInterval(this.timer);
-                clearInterval(this.msgTimer);
-                this.progress = 100;
-                setTimeout(() => { window.location.href = redirectUrl; }, 600);
-            },
-            init() {
-                const self = this;
-                const cleanup = Livewire.hook('commit', ({ commit, succeed, fail }) => {
-                    const calls = commit.calls || [];
-                    if (!calls.some(c => c.method === 'generate')) return;
-                    self.startProgress();
-                    succeed(({ snapshot, effect }) => {
-                        if (effect && effect.redirect) {
-                            const redirectUrl = effect.redirect;
-                            effect.redirect = null;
-                            self.completeProgress(redirectUrl);
-                        } else {
-                            clearInterval(self.timer);
-                            clearInterval(self.msgTimer);
-                            self.progress = 0;
-                        }
-                    });
-                    fail(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
-                });
-                this.$cleanup(cleanup);
-            }
-        }" x-show="progress > 0" x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" style="display: none;"
-        class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[1000] flex items-center justify-center">
-        <div class="bg-white rounded-[2.5rem] p-12 w-full max-w-md shadow-[0_20px_70px_-10px_rgba(0,0,0,0.3)] text-center mx-4 relative overflow-hidden border border-slate-100">
-            <!-- Subtle background decoration -->
-            <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl"></div>
-            <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl"></div>
-            
-            <div class="relative z-10">
-                <div class="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-8 animate-bounce" style="animation-duration: 3s;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-primary animate-spin-slow">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>
-                    </svg>
-                </div>
 
-                <h3 class="text-3xl font-black text-slate-900 uppercase tracking-tighter mb-3 italic">Creating Document</h3>
-                <p x-text="messages[msgIdx]" class="text-slate-600 font-bold text-base mb-10 h-6"></p>
-                
-                <div class="relative mb-4">
-                    <div class="bg-slate-100 rounded-full h-4 w-full overflow-hidden shadow-inner ring-1 ring-slate-200/50">
-                        <div class="h-full bg-gradient-to-r from-primary to-blue-400 rounded-full transition-all duration-300 ease-out shadow-lg"
-                            :style="`width: ${progress}%`"></div>
-                    </div>
-                    <!-- Glow effect for progress bar -->
-                    <div class="absolute top-0 left-0 h-4 bg-primary/30 blur-md rounded-full transition-all duration-300 ease-out"
-                        :style="`width: ${progress}%`"></div>
-                </div>
-
-                <div class="flex items-center justify-between px-1">
-                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400">Progress</span>
-                    <span class="text-lg font-black text-primary italic" x-text="`${Math.round(progress)}%`"></span>
-                </div>
-
-                <div class="mt-10 pt-8 border-t border-slate-100">
-                    <p class="text-xs text-slate-400 font-bold uppercase tracking-widest flex items-center justify-center gap-2">
-                        <svg class="animate-spin h-3 w-3 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        Please keep window open
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <style>
         @keyframes float {

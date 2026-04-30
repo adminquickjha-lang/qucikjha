@@ -40,6 +40,7 @@ Route::middleware(['auth', 'verified', IsAdmin::class])
         Volt::route('template', 'pages.admin.template')->name('admin.template');
         Volt::route('prompts', 'pages.admin.prompts')->name('admin.prompts');
         Volt::route('seo', 'pages.admin.seo-manager')->name('admin.seo');
+        Volt::route('usage/{id}', 'pages.admin.usage-detail')->name('admin.usage');
     });
 
 // Safety System Routes

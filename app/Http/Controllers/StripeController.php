@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Stripe\Checkout\Session;
+use Stripe\Exception\ApiConnectionException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Stripe;
 use Stripe\Webhook;
@@ -17,6 +18,8 @@ class StripeController extends Controller
 {
     public function checkout(SafetyDocument $document)
     {
+        abort_unless(auth()->id() === $document->user_id, 403);
+
         Stripe::setApiKey(config('services.stripe.secret'));
 
         $price = match (strtoupper($document->document_type)) {
@@ -34,17 +37,17 @@ class StripeController extends Controller
                         'price_data' => [
                             'currency' => 'usd',
                             'product_data' => [
-                                'name' => 'Safety Document: ' . $document->project_name,
-                                'description' => $document->document_type . ' Generation',
+                                'name' => 'Safety Document: '.$document->project_name,
+                                'description' => $document->document_type.' Generation',
                             ],
                             'unit_amount' => $price,
                         ],
                         'quantity' => 1,
-                    ]
+                    ],
                 ],
                 'mode' => 'payment',
-                'success_url' => route('stripe.success', ['document' => $document->id]) . '?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => route('preview.' . strtolower($document->document_type), ['id' => $document->id]),
+                'success_url' => route('stripe.success', ['document' => $document->id]).'?session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url' => route('preview.'.strtolower($document->document_type), ['id' => $document->id]),
                 'metadata' => [
                     'document_id' => $document->id,
                 ],
@@ -56,10 +59,10 @@ class StripeController extends Controller
             ]);
 
             return redirect($session->url);
-        } catch (\Stripe\Exception\ApiConnectionException $e) {
+        } catch (ApiConnectionException $e) {
             return redirect()->back()->with('error', 'Unable to connect to payment gateway. Please check your internet connection.');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Payment gateway error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Payment gateway error: '.$e->getMessage());
         }
     }
 
@@ -70,14 +73,16 @@ class StripeController extends Controller
         if ($document->stripe_session_id === $sessionId) {
             $document->update(['is_paid' => true]);
 
-            return redirect()->route('preview.' . strtolower($document->document_type), ['id' => $document->id])->with('success', 'Document unlocked successfully!');
+            return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])->with('success', 'Document unlocked successfully!');
         }
 
-        return redirect()->route('preview.' . strtolower($document->document_type), ['id' => $document->id])->with('error', 'Payment verification failed.');
+        return redirect()->route('preview.'.strtolower($document->document_type), ['id' => $document->id])->with('error', 'Payment verification failed.');
     }
 
     public function professionalReviewCheckout(ProfessionalReview $review)
     {
+        abort_unless(auth()->id() === $review->user_id, 403);
+
         $document = $review->safetyDocument;
 
         Stripe::setApiKey(config('services.stripe.secret'));
@@ -90,17 +95,17 @@ class StripeController extends Controller
                         'price_data' => [
                             'currency' => 'usd',
                             'product_data' => [
-                                'name' => 'Professional Review: ' . $document->project_name,
+                                'name' => 'Professional Review: '.$document->project_name,
                                 'description' => 'Our professionals will review and improve your document.',
                             ],
                             'unit_amount' => 500, // $5.00
                         ],
                         'quantity' => 1,
-                    ]
+                    ],
                 ],
                 'mode' => 'payment',
-                'success_url' => route('stripe.review-success', ['review' => $review->id]) . '?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url' => route('preview.' . strtolower($document->document_type), ['id' => $document->id]),
+                'success_url' => route('stripe.review-success', ['review' => $review->id]).'?session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url' => route('preview.'.strtolower($document->document_type), ['id' => $document->id]),
                 'metadata' => [
                     'review_id' => $review->id,
                     'type' => 'professional_review',
@@ -110,10 +115,10 @@ class StripeController extends Controller
             $review->update(['stripe_session_id' => $session->id]);
 
             return redirect($session->url);
-        } catch (\Stripe\Exception\ApiConnectionException $e) {
+        } catch (ApiConnectionException $e) {
             return redirect()->back()->with('error', 'Unable to connect to payment gateway. Please check your internet connection.');
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Payment gateway error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Payment gateway error: '.$e->getMessage());
         }
     }
 
@@ -128,10 +133,10 @@ class StripeController extends Controller
             $adminEmail = config('mail.admin_email') ?? User::where('role', 'admin')->first()?->email;
             Mail::to($adminEmail)->send(new ProfessionalReviewRequestMail($review));
 
-            return redirect()->route('preview.' . strtolower($review->safetyDocument->document_type), ['id' => $review->safety_document_id])->with('success', 'Professional review requested successfully! Our team will get back to you soon.');
+            return redirect()->route('preview.'.strtolower($review->safetyDocument->document_type), ['id' => $review->safety_document_id])->with('success', 'Professional review requested successfully! Our team will get back to you soon.');
         }
 
-        return redirect()->route('preview.' . strtolower($review->safetyDocument->document_type), ['id' => $review->safety_document_id])->with('error', 'Payment verification failed.');
+        return redirect()->route('preview.'.strtolower($review->safetyDocument->document_type), ['id' => $review->safety_document_id])->with('error', 'Payment verification failed.');
     }
 
     public function webhook(Request $request)
@@ -157,7 +162,7 @@ class StripeController extends Controller
             if ($type === 'professional_review') {
                 $reviewId = $session->metadata->review_id;
                 $review = ProfessionalReview::find($reviewId);
-                if ($review && !$review->is_paid) {
+                if ($review && ! $review->is_paid) {
                     $review->update(['is_paid' => true]);
                     $adminEmail = config('mail.admin_email') ?? User::where('role', 'admin')->first()?->email;
                     Mail::to($adminEmail)->send(new ProfessionalReviewRequestMail($review));

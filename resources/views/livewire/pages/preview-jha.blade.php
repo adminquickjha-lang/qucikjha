@@ -2,12 +2,17 @@
 
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
+use Livewire\WithFileUploads;
 use App\Models\Setting;
 
 new #[Layout('layouts.safety')] class extends Component {
+    use WithFileUploads;
+
     public $id;
     public $paid = false;
     public $project;
+
+    public $newLogo;
 
     public $isEditing = false;
     public $projectName;
@@ -35,6 +40,12 @@ new #[Layout('layouts.safety')] class extends Component {
     {
         $this->id = $id;
         $this->project = \App\Models\SafetyDocument::findOrFail($id);
+
+        abort_unless(
+            auth()->id() === $this->project->user_id || auth()->user()?->role === 'admin',
+            403
+        );
+
         $this->paid = $this->project->is_paid;
 
         $this->projectName = $this->project->project_name;
@@ -53,6 +64,9 @@ new #[Layout('layouts.safety')] class extends Component {
             $step['step_description'] = preg_replace('/^\d+[\.\)]\s*/', '', $rawStep);
         }
         $this->competentActivities = $this->project->ai_response['competent_activities'] ?? [];
+        while (count($this->competentActivities) < 3) {
+            $this->competentActivities[] = ['activity' => '', 'person' => ''];
+        }
         $this->equipment = $this->project->ai_response['equipment'] ?? [];
         $this->reviewCount = $this->project->ai_response['review_count'] ?? 0;
     }
@@ -90,7 +104,96 @@ new #[Layout('layouts.safety')] class extends Component {
         ]);
 
         $this->isEditing = false;
-        $this->dispatch('notify', ['message' => 'Document updated successfully!', 'type' => 'success']);
+        $this->dispatch('swal', ['title' => 'Saved!', 'text' => 'Document updated successfully!', 'icon' => 'success']);
+    }
+
+    public function deleteStep(int $index): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        array_splice($this->steps, $index, 1);
+        $this->steps = array_values($this->steps);
+    }
+
+    public function addStep(): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        $this->steps[] = [
+            'step_description' => '',
+            'hazards' => [''],
+            'controls' => [''],
+            'initial_rac' => 'M',
+        ];
+    }
+
+    public function addStepItem(int $stepIndex, string $field): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        if (!is_array($this->steps[$stepIndex][$field] ?? null)) {
+            $this->steps[$stepIndex][$field] = [$this->steps[$stepIndex][$field] ?? ''];
+        }
+        $this->steps[$stepIndex][$field][] = '';
+    }
+
+    public function deleteStepItem(int $stepIndex, string $field, int $itemIndex): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        array_splice($this->steps[$stepIndex][$field], $itemIndex, 1);
+        $this->steps[$stepIndex][$field] = array_values($this->steps[$stepIndex][$field]);
+    }
+
+    public function addCompetentActivity(): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        $this->competentActivities[] = ['activity' => '', 'person' => ''];
+    }
+
+    public function deleteCompetentActivity(int $index): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        array_splice($this->competentActivities, $index, 1);
+        $this->competentActivities = array_values($this->competentActivities);
+    }
+
+    public function addEquipment(): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        $this->equipment[] = ['equipment' => '', 'training' => '', 'inspection' => ''];
+    }
+
+    public function deleteEquipment(int $index): void
+    {
+        if (!$this->paid) {
+            return;
+        }
+        array_splice($this->equipment, $index, 1);
+        $this->equipment = array_values($this->equipment);
+    }
+
+    public function updatedNewLogo(): void
+    {
+        $this->validate(['newLogo' => 'image|max:3072']);
+
+        if ($this->project->logo_path) {
+            \Storage::disk('public')->delete($this->project->logo_path);
+        }
+
+        $path = $this->newLogo->store('logos', 'public');
+        $this->project->update(['logo_path' => $path]);
+        $this->newLogo = null;
     }
 
     public function handlePayment($method = null)
@@ -172,6 +275,19 @@ new #[Layout('layouts.safety')] class extends Component {
 
             // Re-mount to refresh everything
             $this->mount($this->id);
+
+            // Save review history
+            $inputTokens = $aiResponse->usage->promptTokens ?? 0;
+            $outputTokens = $aiResponse->usage->completionTokens ?? 0;
+            $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
+
+            \App\Models\DocumentReview::create([
+                'safety_document_id' => $this->id,
+                'prompt' => $this->reviewRequest,
+                'input_tokens' => $inputTokens,
+                'output_tokens' => $outputTokens,
+                'cost' => $cost,
+            ]);
 
             $this->reviewRequest = '';
             $this->showReviewModal = false;
@@ -415,7 +531,7 @@ new #[Layout('layouts.safety')] class extends Component {
             {{-- Refined Standardized JHA Header --}}
             <div class="bg-white p-4">
                 {{-- Logo Section --}}
-                <div class="flex justify-center mb-6">
+                <div class="flex flex-col items-center mb-6">
                     @php
                         $logoSrc = '';
                         $customLogoPath = $project->logo_path;
@@ -436,6 +552,17 @@ new #[Layout('layouts.safety')] class extends Component {
                     @endphp
                     @if($logoSrc)
                         <img src="{{ $logoSrc }}" class="max-h-20 w-auto object-contain" alt="Logo" />
+                    @endif
+                    @if($isEditing)
+                        <div class="mt-2 print:hidden">
+                            <label class="cursor-pointer inline-flex items-center gap-2 text-xs font-bold text-primary border border-primary rounded-lg px-3 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                                {{ $logoSrc ? 'Change Logo' : 'Upload Logo' }}
+                                <input type="file" wire:model="newLogo" accept="image/*" class="hidden">
+                            </label>
+                            <div wire:loading wire:target="newLogo" class="text-xs text-gray-500 mt-1">Uploading...</div>
+                            @error('newLogo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                        </div>
                     @endif
                 </div>
 
@@ -658,12 +785,16 @@ on JHA. </p>
                             <th class="px-3 py-3 border border-gray-400 text-center w-64 text-[16px]">Hazards</th>
                             <th class="px-3 py-3 border border-gray-400 text-center text-[16px]">Risk Controls</th>
                             <th class="px-3 py-3 border border-gray-400 text-center w-16 text-[16px]">RAC</th>
+                            @if($isEditing)
+                                <th class="px-2 py-3 border border-gray-400 w-10 print:hidden"></th>
+                            @endif
                         </tr>
                     </thead>
+                    <tbody>
                     @foreach($steps as $i => $h)
                         <tr class="bg-white" wire:key="step-{{ $i }}">
                             <td class="px-3 py-3 border border-gray-300 font-bold text-gray-900 align-top">
-                                {{ $i + 1 }}. 
+                                {{ $i + 1 }}.
                                 @if($isEditing)
                                     <textarea wire:model="steps.{{ $i }}.step_description" class="w-full border-0 p-0 focus:ring-0 font-bold bg-transparent resize-none" rows="3"></textarea>
                                 @else
@@ -673,13 +804,20 @@ on JHA. </p>
                             <td class="px-3 py-3 border border-gray-300 align-top text-black">
                                 @if($isEditing)
                                     @if(is_array($h['hazards']))
-                                        <ol class="list-decimal ml-6 space-y-2">
+                                        <ol class="list-decimal ml-4 space-y-2">
                                             @foreach($h['hazards'] as $hj => $hazard)
-                                                <li>
-                                                    <input type="text" wire:model="steps.{{ $i }}.hazards.{{ $hj }}" class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                <li class="flex items-center gap-1">
+                                                    <input type="text" wire:model="steps.{{ $i }}.hazards.{{ $hj }}" class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                    <button wire:click="deleteStepItem({{ $i }}, 'hazards', {{ $hj }})" type="button" class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                    </button>
                                                 </li>
                                             @endforeach
                                         </ol>
+                                        <button wire:click="addStepItem({{ $i }}, 'hazards')" type="button" class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                            Add
+                                        </button>
                                     @else
                                         <textarea wire:model="steps.{{ $i }}.hazards" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
                                     @endif
@@ -692,13 +830,20 @@ on JHA. </p>
                             <td class="px-3 py-3 border border-gray-300 align-top text-black">
                                 @if($isEditing)
                                     @if(is_array($h['controls']))
-                                        <ol class="list-decimal ml-6 space-y-2">
+                                        <ol class="list-decimal ml-4 space-y-2">
                                             @foreach($h['controls'] as $hc => $control)
-                                                <li>
-                                                    <input type="text" wire:model="steps.{{ $i }}.controls.{{ $hc }}" class="w-full border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                <li class="flex items-center gap-1">
+                                                    <input type="text" wire:model="steps.{{ $i }}.controls.{{ $hc }}" class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                    <button wire:click="deleteStepItem({{ $i }}, 'controls', {{ $hc }})" type="button" class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                    </button>
                                                 </li>
                                             @endforeach
                                         </ol>
+                                        <button wire:click="addStepItem({{ $i }}, 'controls')" type="button" class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                            Add
+                                        </button>
                                     @else
                                         <textarea wire:model="steps.{{ $i }}.controls" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
                                     @endif
@@ -707,48 +852,63 @@ on JHA. </p>
                                         <ol class="list-decimal ml-3 space-y-2">@foreach($h['controls'] as $control)<li>{{ $control }}</li>@endforeach</ol>
                                     @else {!! nl2br(e($h['controls'] ?? $h['control'] ?? 'N/A')) !!} @endif
                                 @endif
-                        </td>
-                        @php 
-                                                                                                                                                    $initialRacRaw = $h['initial_rac'] ?? $h['rac'] ?? $h['risk'] ?? 'N/A';
-                            $initialRac = is_array($initialRacRaw) ? ($initialRacRaw[0] ?? 'N/A') : $initialRacRaw;
-                            $initialRacChar = strtoupper(substr((string) $initialRac, 0, 1));
-                            $initialRacColor = $racColors[$initialRacChar] ?? '#9ca3af';
-                            $initialTextColor = in_array($initialRacChar, ['M', 'L']) ? '#000' : '#fff';
-                        @endphp
-                            <td class="border border-gray-300 text-center align-middle font-black text-[14px]" style="background-color: {{ $initialRacColor }}; color: {{ $initialTextColor }}; width: 56px;">
+                            </td>
+                            @php
+                                $initialRacRaw = $h['initial_rac'] ?? $h['rac'] ?? $h['risk'] ?? 'N/A';
+                                $initialRac = is_array($initialRacRaw) ? ($initialRacRaw[0] ?? 'N/A') : $initialRacRaw;
+                                $initialRacChar = strtoupper(substr((string) $initialRac, 0, 1));
+                                $initialRacColor = $racColors[$initialRacChar] ?? '#9ca3af';
+                                $initialTextColor = in_array($initialRacChar, ['M', 'L']) ? '#000' : '#fff';
+                            @endphp
+                            <td class="border border-gray-300 text-center align-middle font-black text-[14px]" style="background-color: {{ $isEditing ? '#fff' : $initialRacColor }}; color: {{ $isEditing ? '#000' : $initialTextColor }}; width: 70px;">
                                 @if($isEditing)
-                                    <select wire:model="steps.{{ $i }}.initial_rac" class="bg-transparent border-0 p-0 font-black focus:ring-0 text-center">
-                                        <option value="L">L</option>
-                                        <option value="M">M</option>
-                                        <option value="H">H</option>
-                                        <option value="E">E</option>
+                                    <select wire:model.live="steps.{{ $i }}.initial_rac"
+                                        class="w-full text-sm font-bold border border-gray-400 rounded px-1 py-1.5 focus:ring-1 focus:ring-blue-500 bg-white text-black cursor-pointer">
+                                        <option value="E" style="background:#c0392b;color:#fff;">E — Extreme</option>
+                                        <option value="H" style="background:#e67e22;color:#fff;">H — High</option>
+                                        <option value="M" style="background:#f1c40f;color:#000;">M — Medium</option>
+                                        <option value="L" style="background:#27ae60;color:#fff;">L — Low</option>
                                     </select>
                                 @else
                                     {{ $initialRac }}
                                 @endif
                             </td>
+                            @if($isEditing)
+                                <td class="border border-gray-300 p-2 align-top print:hidden">
+                                    <button wire:click="deleteStep({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                    </button>
+                                </td>
+                            @endif
                         </tr>
                     @endforeach
                     </tbody>
                 </table>
             </div>
+            @if($isEditing)
+                <button wire:click="addStep" type="button"
+                    class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    Add Step
+                </button>
+            @endif
 
             <table class="w-full border-collapse text-[13px] mt-6">
                 <thead>
                     <tr class="text-white text-[11px] font-black uppercase" style="background-color: {{ $headerColor }}">
-                        <th colspan="2" class="px-4 py-3 border border-blue-400/30 text-center text-[16px]">
+                        <th colspan="{{ $isEditing ? 3 : 2 }}" class="px-4 py-3 border border-blue-400/30 text-center text-[16px]">
                             Activities Requiring a Competent or Qualified Person – Attach Proof of Competency
                         </th>
                     </tr>
                     <tr class="text-white text-[11px] font-black uppercase" style="background-color: {{ $tableHeaderColor }}">
                         <th class="px-3 py-2 border border-gray-400 text-center w-1/2 text-[16px]">Activity</th>
                         <th class="px-3 py-2 border border-gray-400 text-center w-1/2 text-[16px]">Designated Competent or Qualified Person</th>
+                        @if($isEditing)
+                            <th class="px-2 py-2 border border-gray-400 w-10 print:hidden"></th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody>
-                    @php
-                        $competentActivities = $project->ai_response['competent_activities'] ?? [];
-                    @endphp
                     @forelse($competentActivities as $i => $act)
                         <tr class="{{ $i % 2 === 1 ? 'bg-gray-50' : 'bg-white' }}">
                             <td class="px-3 py-2.5 border border-gray-300 font-bold text-black">
@@ -765,15 +925,32 @@ on JHA. </p>
                                     {{ $act['person'] ?? 'On-site Supervisor' }}
                                 @endif
                             </td>
+                            @if($isEditing)
+                                <td class="border border-gray-300 p-2 align-middle print:hidden">
+                                    <button wire:click="deleteCompetentActivity({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                    </button>
+                                </td>
+                            @endif
                         </tr>
                     @empty
                         <tr class="bg-white">
                             <td class="px-3 py-2.5 border border-gray-300 font-bold text-black">General Safety Oversight</td>
                             <td class="px-3 py-2.5 border border-gray-300 text-black">{{ $project->competent_person ?? 'To be designated' }}</td>
+                            @if($isEditing)
+                                <td class="border border-gray-300 p-2 print:hidden"></td>
+                            @endif
                         </tr>
                     @endforelse
                 </tbody>
             </table>
+            @if($isEditing)
+                <button wire:click="addCompetentActivity" type="button"
+                    class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    Add Activity
+                </button>
+            @endif
 
             {{-- Equipment Table --}}
             <div class="text-white font-black text-[16px] px-4 py-2.5 tracking-widest uppercase mt-6 text-center" style="background-color: {{ $headerColor }}">
@@ -785,6 +962,9 @@ on JHA. </p>
                         <th class="px-3 py-2 border border-gray-400 text-center w-1/3 text-[16px]">Equipment to be Used</th>
                         <th class="px-3 py-2 border border-gray-400 text-center w-1/3 text-[16px]">Training Required</th>
                         <th class="px-3 py-2 border border-gray-400 text-center w-1/3 text-[16px]">Inspection Requirements</th>
+                        @if($isEditing)
+                            <th class="px-2 py-2 border border-gray-400 w-10 print:hidden"></th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody>
@@ -811,14 +991,28 @@ on JHA. </p>
                                     {{ $eq['inspection'] ?? '' }}
                                 @endif
                             </td>
+                            @if($isEditing)
+                                <td class="border border-gray-300 p-2 align-middle print:hidden">
+                                    <button wire:click="deleteEquipment({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                    </button>
+                                </td>
+                            @endif
                         </tr>
                     @empty
                         <tr class="bg-white">
-                            <td colspan="3" class="px-3 py-4 border border-gray-300 text-center text-gray-500 italic">Equipment details not specified.</td>
+                            <td colspan="{{ $isEditing ? 4 : 3 }}" class="px-3 py-4 border border-gray-300 text-center text-gray-500 italic">Equipment details not specified.</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
+            @if($isEditing)
+                <button wire:click="addEquipment" type="button"
+                    class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    Add Equipment
+                </button>
+            @endif
 
             {{-- Signatures --}}
             <div class="text-white font-black text-[16px] px-4 py-2.5 tracking-widest uppercase text-center" style="background-color: {{ $headerColor }}">
@@ -905,8 +1099,97 @@ on JHA. </p>
             </div>
 
             </div>
-        </div>
 
+            {{-- Usage & History Section (Visible ONLY to Admin) --}}
+            @if(auth()->check() && auth()->user()->role === 'admin')
+            <div class="mt-12 bg-white rounded-3xl p-8 shadow-sm border border-slate-200/60 ring-1 ring-slate-100 print:hidden">
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10l4.5 4.5"/><circle cx="12" cy="12" r="10"/></svg>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-black text-slate-900 tracking-tight">Usage & Review History</h3>
+                            <p class="text-sm text-slate-500 font-medium italic">Track your AI token consumption and document iterations.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-6 text-right">
+                        <div>
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Tokens Spent</span>
+                            <div class="text-xl font-bold text-slate-700">{{ number_format($project->total_tokens) }}</div>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Document Spend</span>
+                            <div class="text-2xl font-black text-purple-600">${{ number_format($project->total_ai_cost, 4) }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    {{-- Initial Generation --}}
+                    <div class="flex gap-6 p-6 bg-slate-50/50 rounded-2xl border border-slate-100 transition-all hover:border-purple-200 group">
+                        <div class="flex-shrink-0 w-1 bg-purple-200 rounded-full group-hover:bg-purple-500 transition-colors"></div>
+                        <div class="flex-grow">
+                            <div class="flex justify-between items-start mb-2">
+                                <h4 class="font-black text-slate-900 uppercase tracking-tight text-sm italic">Initial Document Generation</h4>
+                                <span class="text-[10px] font-bold text-slate-400">{{ $project->created_at->format('M d, Y H:i') }}</span>
+                            </div>
+                            <div class="flex gap-8">
+                                <div>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
+                                    <span class="text-sm font-bold text-slate-700">{{ number_format($project->input_tokens) }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
+                                    <span class="text-sm font-bold text-slate-700">{{ number_format($project->output_tokens) }}</span>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cost</span>
+                                    <span class="text-sm font-black text-purple-600">${{ number_format($project->cost, 4) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Automated Reviews History --}}
+                    @foreach($project->reviews()->latest()->get() as $idx => $review)
+                        <div class="flex gap-6 p-6 bg-white rounded-2xl border border-slate-100 transition-all hover:border-blue-200 group relative overflow-hidden">
+                            <div class="absolute top-0 right-0 p-3 bg-blue-50 text-blue-400 font-black text-[10px] uppercase tracking-widest rounded-bl-xl">Review #{{ $project->reviews()->count() - $idx }}</div>
+                            <div class="flex-shrink-0 w-1 bg-blue-200 rounded-full group-hover:bg-blue-500 transition-colors"></div>
+                            <div class="flex-grow">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div>
+                                        <h4 class="font-black text-slate-900 uppercase tracking-tight text-sm italic mb-1">AI Automated Review</h4>
+                                        <p class="text-xs text-slate-600 font-medium bg-slate-50 p-3 rounded-xl border border-slate-100 ring-1 ring-slate-200/50 mt-2">
+                                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 opacity-60">Request:</span>
+                                            "{{ $review->prompt }}"
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-8 mt-4 pt-4 border-t border-slate-100">
+                                    <div>
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
+                                        <span class="text-sm font-bold text-slate-700">{{ number_format($review->input_tokens) }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
+                                        <span class="text-sm font-bold text-slate-700">{{ number_format($review->output_tokens) }}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cost</span>
+                                        <span class="text-sm font-black text-blue-600">${{ number_format($review->cost, 4) }}</span>
+                                    </div>
+                                    <div class="ml-auto text-right">
+                                        <span class="text-[10px] font-bold text-slate-400">{{ $review->created_at->format('M d, Y H:i') }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+        </div>
 
     @if($showReviewModal)
         <div 

@@ -4,7 +4,6 @@ namespace App\Ai\Agents;
 
 use App\Models\SafetyDocument;
 use Laravel\Ai\Attributes\MaxTokens;
-
 use Laravel\Ai\Attributes\Model;
 use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
@@ -18,8 +17,8 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::OpenRouter)]
-#[Model('openrouter/free')]
+#[Provider(Lab::Anthropic)]
+#[Model('claude-3-5-sonnet-latest')]
 #[Temperature(0.0)]
 #[Timeout(300)]
 #[MaxTokens(16000)]
@@ -31,8 +30,7 @@ class AhaAgent implements Agent, Conversational, HasTools
         public SafetyDocument $document,
         public string $regulations,
         public string $extraContext = ''
-    ) {
-    }
+    ) {}
 
     /**
      * Get the instructions that the agent should follow.
@@ -48,8 +46,8 @@ class AhaAgent implements Agent, Conversational, HasTools
 Project Context:
 - Company: {$this->document->company_name}
 - Project: {$this->document->project_name}
-- Description: " . ($this->document->project_description ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS') . '
-- Equipment & Tools: ' . ($this->document->equipment_tools ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS') . "
+- Description: ".($this->document->project_description ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS').'
+- Equipment & Tools: '.($this->document->equipment_tools ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS')."
 - Project Location: {$this->document->project_location}
 - Applicable Regulations: {$this->regulations}
 
