@@ -15,14 +15,16 @@ if (! function_exists('getSeo')) {
                 return Seo::where('key', $key)->first();
             });
 
-            if ($seo instanceof \__PHP_Incomplete_Class) {
+            if ($seo instanceof __PHP_Incomplete_Class) {
                 Cache::forget("seo.{$key}");
+
                 return Seo::where('key', $key)->first();
             }
 
             return $seo;
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Cache::forget("seo.{$key}");
+
             return Seo::where('key', $key)->first();
         }
     }

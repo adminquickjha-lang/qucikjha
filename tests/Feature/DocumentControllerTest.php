@@ -1,17 +1,15 @@
 <?php
 
-use App\Models\User;
 use App\Models\SafetyDocument;
-use Illuminate\Support\Facades\Http;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Barryvdh\DomPDF\Facade\Pdf;
 
 uses(RefreshDatabase::class);
 
 test('user cannot download pdf if unpaid and not the owner', function () {
     $user = User::factory()->create();
     $owner = User::factory()->create();
-    
+
     $doc = SafetyDocument::create([
         'user_id' => $owner->id,
         'company_name' => 'Co',
@@ -31,7 +29,7 @@ test('user cannot download pdf if unpaid and not the owner', function () {
 test('user can download pdf if paid', function () {
     $user = User::factory()->create();
     $owner = User::factory()->create();
-    
+
     $doc = SafetyDocument::create([
         'user_id' => $owner->id,
         'company_name' => 'Co',
@@ -50,7 +48,7 @@ test('user can download pdf if paid', function () {
 
 test('owner can download pdf even if unpaid', function () {
     $owner = User::factory()->create();
-    
+
     $doc = SafetyDocument::create([
         'user_id' => $owner->id,
         'company_name' => 'Co',
@@ -70,7 +68,7 @@ test('owner can download pdf even if unpaid', function () {
 test('user cannot download word if unpaid and not the owner', function () {
     $user = User::factory()->create();
     $owner = User::factory()->create();
-    
+
     $doc = SafetyDocument::create([
         'user_id' => $owner->id,
         'company_name' => 'Co',
@@ -90,7 +88,7 @@ test('user cannot download word if unpaid and not the owner', function () {
 test('user can download word if paid', function () {
     $user = User::factory()->create();
     $owner = User::factory()->create();
-    
+
     $doc = SafetyDocument::create([
         'user_id' => $owner->id,
         'company_name' => 'Co',
@@ -109,7 +107,7 @@ test('user can download word if paid', function () {
 
 test('owner can download word even if unpaid', function () {
     $owner = User::factory()->create();
-    
+
     $doc = SafetyDocument::create([
         'user_id' => $owner->id,
         'company_name' => 'Co',

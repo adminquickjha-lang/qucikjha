@@ -24,7 +24,7 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             $table->dropColumn('google_id');
-            // Normally you wouldn't make the password un-nullable if it already has data, 
+            // Normally you wouldn't make the password un-nullable if it already has data,
             // but for a clean rollback we'll just leave it if it works or reverse if requested.
         });
     }

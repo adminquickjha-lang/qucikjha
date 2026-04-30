@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Seo;
 use Illuminate\Database\Seeder;
 
 class SeoSeeder extends Seeder
@@ -79,7 +79,7 @@ class SeoSeeder extends Seeder
         ];
 
         foreach ($pages as $page) {
-            \App\Models\Seo::updateOrCreate(['key' => $page['key']], $page);
+            Seo::updateOrCreate(['key' => $page['key']], $page);
         }
     }
 }
