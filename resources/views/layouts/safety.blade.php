@@ -107,11 +107,8 @@
                 @endif
             }
 
-            if (window.Livewire) {
-                document.addEventListener('livewire:navigated', fireSessionAlerts, { once: true });
-            } else {
-                fireSessionAlerts();
-            }
+            document.addEventListener('DOMContentLoaded', fireSessionAlerts);
+            document.addEventListener('livewire:navigated', fireSessionAlerts, { once: true });
         </script>
     @endif
 

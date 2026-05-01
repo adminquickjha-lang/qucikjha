@@ -39,11 +39,7 @@ class SocialiteController extends Controller
 
         Auth::login($user);
 
-        session()->flash('swal', [
-            'title' => 'Welcome, ' . $user->name . '!',
-            'text' => 'You have successfully signed in with Google.',
-            'icon' => 'success',
-        ]);
+        session()->flash('success', 'Welcome back, ' . $user->name . '! You signed in with Google.');
 
         return redirect()->intended(route('user-dashboard', absolute: false));
     }
