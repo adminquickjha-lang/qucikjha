@@ -277,8 +277,8 @@ new #[Layout('layouts.safety')] class extends Component {
             $this->mount($this->id);
 
             // Save review history
-            $inputTokens = $aiResponse->usage->promptTokens ?? 0;
-            $outputTokens = $aiResponse->usage->completionTokens ?? 0;
+            $inputTokens = ($aiResponse->usage->promptTokens ?? 0) + ($aiResponse->usage->cacheReadInputTokens ?? 0);
+            $outputTokens = ($aiResponse->usage->completionTokens ?? 0) + ($aiResponse->usage->reasoningTokens ?? 0);
             $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
 
             \App\Models\DocumentReview::create([
@@ -893,65 +893,6 @@ on JHA. </p>
                 </button>
             @endif
 
-            <table class="w-full border-collapse text-[13px] mt-6">
-                <thead>
-                    <tr class="text-white text-[11px] font-black uppercase" style="background-color: {{ $headerColor }}">
-                        <th colspan="{{ $isEditing ? 3 : 2 }}" class="px-4 py-3 border border-blue-400/30 text-center text-[16px]">
-                            Activities Requiring a Competent or Qualified Person – Attach Proof of Competency
-                        </th>
-                    </tr>
-                    <tr class="text-white text-[11px] font-black uppercase" style="background-color: {{ $tableHeaderColor }}">
-                        <th class="px-3 py-2 border border-gray-400 text-center w-1/2 text-[16px]">Activity</th>
-                        <th class="px-3 py-2 border border-gray-400 text-center w-1/2 text-[16px]">Designated Competent or Qualified Person</th>
-                        @if($isEditing)
-                            <th class="px-2 py-2 border border-gray-400 w-10 print:hidden"></th>
-                        @endif
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($competentActivities as $i => $act)
-                        <tr class="{{ $i % 2 === 1 ? 'bg-gray-50' : 'bg-white' }}">
-                            <td class="px-3 py-2.5 border border-gray-300 font-bold text-black">
-                                @if($isEditing)
-                                    <input type="text" wire:model="competentActivities.{{ $i }}.activity" class="w-full border-0 p-0 focus:ring-0 bg-transparent font-bold">
-                                @else
-                                    {{ $act['activity'] ?? 'General Supervision' }}
-                                @endif
-                            </td>
-                            <td class="px-3 py-2.5 border border-gray-300 text-black">
-                                @if($isEditing)
-                                    <input type="text" wire:model="competentActivities.{{ $i }}.person" class="w-full border-0 p-0 focus:ring-0 bg-transparent">
-                                @else
-                                    {{ $act['person'] ?? 'On-site Supervisor' }}
-                                @endif
-                            </td>
-                            @if($isEditing)
-                                <td class="border border-gray-300 p-2 align-middle print:hidden">
-                                    <button wire:click="deleteCompetentActivity({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                    </button>
-                                </td>
-                            @endif
-                        </tr>
-                    @empty
-                        <tr class="bg-white">
-                            <td class="px-3 py-2.5 border border-gray-300 font-bold text-black">General Safety Oversight</td>
-                            <td class="px-3 py-2.5 border border-gray-300 text-black">{{ $project->competent_person ?? 'To be designated' }}</td>
-                            @if($isEditing)
-                                <td class="border border-gray-300 p-2 print:hidden"></td>
-                            @endif
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-            @if($isEditing)
-                <button wire:click="addCompetentActivity" type="button"
-                    class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                    Add Activity
-                </button>
-            @endif
-
             {{-- Equipment Table --}}
             <div class="text-white font-black text-[16px] px-4 py-2.5 tracking-widest uppercase mt-6 text-center" style="background-color: {{ $headerColor }}">
                 Equipment to be Used | Training | Inspection
@@ -1011,6 +952,65 @@ on JHA. </p>
                     class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                     Add Equipment
+                </button>
+            @endif
+
+            <table class="w-full border-collapse text-[13px] mt-6">
+                <thead>
+                    <tr class="text-white text-[11px] font-black uppercase" style="background-color: {{ $headerColor }}">
+                        <th colspan="{{ $isEditing ? 3 : 2 }}" class="px-4 py-3 border border-blue-400/30 text-center text-[16px]">
+                            Activities Requiring a Competent or Qualified Person – Attach Proof of Competency
+                        </th>
+                    </tr>
+                    <tr class="text-white text-[11px] font-black uppercase" style="background-color: {{ $tableHeaderColor }}">
+                        <th class="px-3 py-2 border border-gray-400 text-center w-1/2 text-[16px]">Activity</th>
+                        <th class="px-3 py-2 border border-gray-400 text-center w-1/2 text-[16px]">Designated Competent or Qualified Person</th>
+                        @if($isEditing)
+                            <th class="px-2 py-2 border border-gray-400 w-10 print:hidden"></th>
+                        @endif
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($competentActivities as $i => $act)
+                        <tr class="{{ $i % 2 === 1 ? 'bg-gray-50' : 'bg-white' }}">
+                            <td class="px-3 py-2.5 border border-gray-300 font-bold text-black">
+                                @if($isEditing)
+                                    <input type="text" wire:model="competentActivities.{{ $i }}.activity" class="w-full border-0 p-0 focus:ring-0 bg-transparent font-bold">
+                                @else
+                                    {{ $act['activity'] ?? 'General Supervision' }}
+                                @endif
+                            </td>
+                            <td class="px-3 py-2.5 border border-gray-300 text-black">
+                                @if($isEditing)
+                                    <input type="text" wire:model="competentActivities.{{ $i }}.person" class="w-full border-0 p-0 focus:ring-0 bg-transparent">
+                                @else
+                                    {{ $act['person'] ?? 'On-site Supervisor' }}
+                                @endif
+                            </td>
+                            @if($isEditing)
+                                <td class="border border-gray-300 p-2 align-middle print:hidden">
+                                    <button wire:click="deleteCompetentActivity({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                    </button>
+                                </td>
+                            @endif
+                        </tr>
+                    @empty
+                        <tr class="bg-white">
+                            <td class="px-3 py-2.5 border border-gray-300 font-bold text-black">General Safety Oversight</td>
+                            <td class="px-3 py-2.5 border border-gray-300 text-black">{{ $project->competent_person ?? 'To be designated' }}</td>
+                            @if($isEditing)
+                                <td class="border border-gray-300 p-2 print:hidden"></td>
+                            @endif
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+            @if($isEditing)
+                <button wire:click="addCompetentActivity" type="button"
+                    class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    Add Activity
                 </button>
             @endif
 
@@ -1213,66 +1213,6 @@ on JHA. </p>
                 x-transition:leave-end="opacity-0 scale-95 translate-y-4"
                 class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative"
             >
-                {{-- Review Progress Overlay --}}
-                <div
-                    x-data="{
-                        progress: 0,
-                        msgIdx: 0,
-                        messages: [
-                            'Reading your document...',
-                            'Analyzing requested changes...',
-                            'Applying improvements...',
-                            'Updating safety controls...',
-                            'Finalizing revisions...'
-                        ],
-                        timer: null,
-                        msgTimer: null,
-                        startProgress() {
-                            this.progress = 0;
-                            this.msgIdx = 0;
-                            clearInterval(this.timer);
-                            clearInterval(this.msgTimer);
-                            this.timer = setInterval(() => {
-                                if (this.progress < 88) {
-                                    const rem = 88 - this.progress;
-                                    this.progress = Math.min(88, this.progress + Math.max(0.4, rem * 0.02));
-                                }
-                            }, 250);
-                            this.msgTimer = setInterval(() => {
-                                this.msgIdx = (this.msgIdx + 1) % this.messages.length;
-                            }, 3000);
-                        },
-                        completeProgress() {
-                            clearInterval(this.timer);
-                            clearInterval(this.msgTimer);
-                            this.progress = 100;
-                        },
-                        init() {
-                            const self = this;
-                            const cleanup = Livewire.hook('commit', ({ commit, succeed, fail }) => {
-                                const calls = commit.calls || [];
-                                if (!calls.some(c => c.method === 'review')) return;
-                                self.startProgress();
-                                succeed(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 100; setTimeout(() => { self.progress = 0; }, 800); });
-                                fail(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
-                            });
-                            this.$cleanup(cleanup);
-                        }
-                    }"
-                    x-show="progress > 0"
-                    style="display: none;"
-                    class="absolute inset-0 bg-white rounded-3xl flex flex-col items-center justify-center z-10 p-8"
-                >
-                    <h4 class="text-lg font-black text-slate-900 uppercase tracking-tighter mb-1">Applying Changes</h4>
-                    <p x-text="messages[msgIdx]" class="text-slate-500 font-medium text-sm mb-6 h-5"></p>
-                    <div class="bg-slate-100 rounded-full h-2 w-full overflow-hidden shadow-inner">
-                        <div
-                            class="h-full bg-primary rounded-full transition-all duration-300 ease-out"
-                            :style="`width: ${progress}%`"
-                        ></div>
-                    </div>
-                    <p class="text-sm font-bold text-slate-400 mt-2" x-text="`${Math.round(progress)}%`"></p>
-                </div>
 
                 <button @click="show = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>

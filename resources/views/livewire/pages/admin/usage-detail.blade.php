@@ -53,80 +53,78 @@ new #[Layout('layouts.safety')] class extends Component {
         </div>
     </div>
 
-    <!-- Timeline -->
-    <div class="space-y-8 relative">
-        <div class="absolute left-6 top-8 bottom-8 w-px bg-slate-100"></div>
+    <!-- Entries -->
+    <div class="space-y-8">
 
         {{-- Initial Generation --}}
-        <div class="relative pl-16">
-            <div class="absolute left-4 top-1 w-4 h-4 rounded-full bg-purple-500 ring-4 ring-purple-50 shadow-lg"></div>
-            <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm hover:shadow-md transition-all">
-                <div class="flex justify-between items-start mb-6">
-                    <div>
-                        <h3 class="text-lg font-black text-slate-900 italic uppercase tracking-tight mb-1">Initial Document Generation</h3>
-                        <p class="text-xs text-slate-400 font-bold tracking-widest uppercase">{{ $project->created_at->format('M d, Y @ H:i:s') }}</p>
-                    </div>
-                    <span class="px-3 py-1 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg">Level 0</span>
+        <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm hover:shadow-md transition-all">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h3 class="text-lg font-black text-slate-900 italic uppercase tracking-tight mb-1">Initial Document Generation</h3>
+                    <p class="text-xs text-slate-400 font-bold tracking-widest uppercase">{{ $project->created_at->format('M d, Y @ H:i:s') }}</p>
                 </div>
+                <span class="px-3 py-1 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-lg">Initial</span>
+            </div>
 
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div>
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
-                        <span class="text-sm font-bold text-slate-700">{{ number_format($project->input_tokens) }}</span>
-                    </div>
-                    <div>
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
-                        <span class="text-sm font-bold text-slate-700">{{ number_format($project->output_tokens) }}</span>
-                    </div>
-                    <div>
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Model Cost</span>
-                        <span class="text-sm font-black text-purple-600">${{ number_format($project->cost, 4) }}</span>
-                    </div>
-                    <div class="text-right">
-                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Status</span>
-                        <span class="text-[10px] font-black text-emerald-500 uppercase tracking-widest">SUCCESS</span>
-                    </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                <div>
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
+                    <span class="text-sm font-bold text-slate-700">{{ number_format($project->input_tokens) }}</span>
+                </div>
+                <div>
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
+                    <span class="text-sm font-bold text-slate-700">{{ number_format($project->output_tokens) }}</span>
+                </div>
+                <div>
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Model Cost</span>
+                    <span class="text-sm font-black text-purple-600">${{ number_format($project->cost, 4) }}</span>
+                </div>
+                <div>
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Status</span>
+                    <span class="text-[10px] font-black text-emerald-500 uppercase tracking-widest">SUCCESS</span>
                 </div>
             </div>
         </div>
 
         {{-- Reviews History --}}
+        @php $totalReviews = $project->reviews()->count(); @endphp
         @foreach($project->reviews()->latest()->get() as $idx => $review)
-            <div class="relative pl-16">
-                <div class="absolute left-4 top-1 w-4 h-4 rounded-full bg-blue-500 ring-4 ring-blue-50 shadow-lg"></div>
-                <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm hover:shadow-md transition-all">
-                    <div class="flex justify-between items-start mb-6">
-                        <div>
-                            <h3 class="text-lg font-black text-slate-900 italic uppercase tracking-tight mb-1">AI Automated Review #{{ $project->reviews()->count() - $idx }}</h3>
-                            <p class="text-xs text-slate-400 font-bold tracking-widest uppercase">{{ $review->created_at->format('M d, Y @ H:i:s') }}</p>
-                        </div>
-                        <span class="px-3 py-1 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg">Iterative</span>
+            @php $levelNumber = $totalReviews - $idx; @endphp
+            <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm hover:shadow-md transition-all">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 class="text-lg font-black text-slate-900 italic uppercase tracking-tight mb-1">AI Automated Review #{{ $levelNumber }}</h3>
+                        <p class="text-xs text-slate-400 font-bold tracking-widest uppercase">{{ $review->created_at->format('M d, Y @ H:i:s') }}</p>
                     </div>
-
-                    <div class="mb-6">
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">User Request:</span>
-                        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-sm font-medium text-slate-700 italic">
-                            "{{ $review->prompt }}"
-                        </div>
+                    <div class="flex flex-col items-end gap-1.5">
+                        <span class="px-3 py-1 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-lg">Level {{ $levelNumber }}</span>
+                        <span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">AI Revision</span>
                     </div>
+                </div>
 
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-6 p-6 bg-blue-50/30 rounded-2xl border border-blue-100/50">
-                        <div>
-                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
-                            <span class="text-sm font-bold text-slate-700">{{ number_format($review->input_tokens) }}</span>
-                        </div>
-                        <div>
-                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
-                            <span class="text-sm font-bold text-slate-700">{{ number_format($review->output_tokens) }}</span>
-                        </div>
-                        <div>
-                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Review Cost</span>
-                            <span class="text-sm font-black text-blue-600">${{ number_format($review->cost, 4) }}</span>
-                        </div>
-                        <div class="text-right">
-                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Method</span>
-                            <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest">AI_REVISION</span>
-                        </div>
+                <div class="mb-6">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">User Request:</span>
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-sm font-medium text-slate-700 italic">
+                        "{{ $review->prompt }}"
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 p-6 bg-blue-50/30 rounded-2xl border border-blue-100/50">
+                    <div>
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
+                        <span class="text-sm font-bold text-slate-700">{{ number_format($review->input_tokens) }}</span>
+                    </div>
+                    <div>
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
+                        <span class="text-sm font-bold text-slate-700">{{ number_format($review->output_tokens) }}</span>
+                    </div>
+                    <div>
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Review Cost</span>
+                        <span class="text-sm font-black text-blue-600">${{ number_format($review->cost, 4) }}</span>
+                    </div>
+                    <div>
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Method</span>
+                        <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest">AI_REVISION</span>
                     </div>
                 </div>
             </div>

@@ -17,8 +17,8 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::Anthropic)]
-#[Model('claude-3-5-sonnet-latest')]
+#[Provider(Lab::Gemini)]
+#[Model('gemini-2.5-flash')]
 #[Temperature(0.0)]
 #[Timeout(300)]
 #[MaxTokens(16000)]
@@ -30,7 +30,8 @@ class JsaAgent implements Agent, Conversational, HasTools
         public SafetyDocument $document,
         public string $regulations,
         public string $extraContext = ''
-    ) {}
+    ) {
+    }
 
     /**
      * Get the instructions that the agent should follow.
@@ -46,8 +47,8 @@ class JsaAgent implements Agent, Conversational, HasTools
 Project Context:
 - Company: {$this->document->company_name}
 - Project: {$this->document->project_name}
-- Description: ".($this->document->project_description ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS').'
-- Equipment & Tools: '.($this->document->equipment_tools ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS')."
+- Description: " . ($this->document->project_description ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS') . '
+- Equipment & Tools: ' . ($this->document->equipment_tools ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS') . "
 - Project Location: {$this->document->project_location}
 - Applicable Regulations: {$this->regulations}
 
@@ -90,7 +91,7 @@ Output ONLY a valid JSON object (no markdown, no explanation) with SIX keys:
    - 'ppe_checklist': Object with boolean flags: 'safety_glasses', 'safety_shoes', 'hearing_protection', 'hard_hat', 'face_shield', 'chemical_goggles', 'welding_helmet', 'fall_protection', 'nitrile_gloves', 'cut_resistant_gloves', 'abrasion_resistant_gloves', 'leather_gloves', 'respiratory_protection'.
    - 'ppe_others': Array of strings for any other PPE not in the checklist.
 
-Generate exactly 12 to 14 detailed job steps, and 3 competent person activities according to your analysis. Each step MUST have exactly 3-4 hazards with an equal number of matching controls and responsibilities (1-to-1 mapping). Ensure the output is thorough and professional, yet concise enough for rapid generation. Maintain professional safety terminology throughout.";
+Generate exactly 12 to 14 detailed job steps, and 3 competent person activities according to your analysis. Each step MUST have exactly 5-6 hazards with an equal number of matching controls and responsibilities (1-to-1 mapping). Ensure the output is thorough and professional, yet concise enough for rapid generation. Maintain professional safety terminology throughout.";
     }
 
     /**

@@ -288,8 +288,8 @@ new #[Layout('layouts.safety')] class extends Component {
             $this->mount($this->id);
 
             // Save review history
-            $inputTokens = $aiResponse->usage->promptTokens ?? 0;
-            $outputTokens = $aiResponse->usage->completionTokens ?? 0;
+            $inputTokens = ($aiResponse->usage->promptTokens ?? 0) + ($aiResponse->usage->cacheReadInputTokens ?? 0);
+            $outputTokens = ($aiResponse->usage->completionTokens ?? 0) + ($aiResponse->usage->reasoningTokens ?? 0);
             $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
 
             \App\Models\DocumentReview::create([
@@ -1067,60 +1067,6 @@ new #[Layout('layouts.safety')] class extends Component {
                 x-transition:leave-start="opacity-100 scale-100 translate-y-0"
                 x-transition:leave-end="opacity-0 scale-95 translate-y-4"
                 class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative">
-                {{-- Review Progress Overlay --}}
-                <div x-data="{
-                                        progress: 0,
-                                        msgIdx: 0,
-                                        messages: [
-                                            'Reading your document...',
-                                            'Analyzing requested changes...',
-                                            'Applying improvements...',
-                                            'Updating safety controls...',
-                                            'Finalizing revisions...'
-                                        ],
-                                        timer: null,
-                                        msgTimer: null,
-                                        startProgress() {
-                                            this.progress = 0;
-                                            this.msgIdx = 0;
-                                            clearInterval(this.timer);
-                                            clearInterval(this.msgTimer);
-                                            this.timer = setInterval(() => {
-                                                if (this.progress < 88) {
-                                                    const rem = 88 - this.progress;
-                                                    this.progress = Math.min(88, this.progress + Math.max(0.4, rem * 0.02));
-                                                }
-                                            }, 250);
-                                            this.msgTimer = setInterval(() => {
-                                                this.msgIdx = (this.msgIdx + 1) % this.messages.length;
-                                            }, 3000);
-                                        },
-                                        completeProgress() {
-                                            clearInterval(this.timer);
-                                            clearInterval(this.msgTimer);
-                                            this.progress = 100;
-                                        },
-                                        init() {
-                                            const self = this;
-                                            const cleanup = Livewire.hook('commit', ({ commit, succeed, fail }) => {
-                                                const calls = commit.calls || [];
-                                                if (!calls.some(c => c.method === 'review')) return;
-                                                self.startProgress();
-                                                succeed(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 100; setTimeout(() => { self.progress = 0; }, 800); });
-                                                fail(() => { clearInterval(self.timer); clearInterval(self.msgTimer); self.progress = 0; });
-                                            });
-                                            this.$cleanup(cleanup);
-                                        }
-                                    }" x-show="progress > 0" style="display: none;"
-                    class="absolute inset-0 bg-white rounded-3xl flex flex-col items-center justify-center z-10 p-8">
-                    <h4 class="text-lg font-black text-slate-900 uppercase tracking-tighter mb-1">Applying Changes</h4>
-                    <p x-text="messages[msgIdx]" class="text-slate-500 font-medium text-sm mb-6 h-5"></p>
-                    <div class="bg-slate-100 rounded-full h-2 w-full overflow-hidden shadow-inner">
-                        <div class="h-full bg-primary rounded-full transition-all duration-300 ease-out"
-                            :style="`width: ${progress}%`"></div>
-                    </div>
-                    <p class="text-sm font-bold text-slate-400 mt-2" x-text="`${Math.round(progress)}%`"></p>
-                </div>
 
                 <button @click="show = false"
                     class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">

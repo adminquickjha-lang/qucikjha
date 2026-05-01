@@ -17,8 +17,8 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::Anthropic)]
-#[Model('claude-3-5-sonnet-latest')]
+#[Provider(Lab::Gemini)]
+#[Model('gemini-2.5-flash')]
 #[Temperature(0.0)]
 #[Timeout(300)]
 #[MaxTokens(16000)]

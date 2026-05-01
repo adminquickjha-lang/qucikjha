@@ -30,6 +30,12 @@ new #[Layout('layouts.safety')] class extends Component {
         $this->date = date('Y-m-d');
     }
 
+    public function updatedSelectedRegion(): void
+    {
+        $this->selectedRegs = [];
+        $this->customRegText = '';
+    }
+
     public function getTypeInfoProperty()
     {
         $jhaPrice = Setting::where('key', 'jha_price')->value('value') ?? '19.90';
@@ -211,8 +217,8 @@ new #[Layout('layouts.safety')] class extends Component {
                 $decoded = json_decode($content, true);
 
                 if ($decoded) {
-                    $inputTokens = $aiResponse->usage->promptTokens ?? 0;
-                    $outputTokens = $aiResponse->usage->completionTokens ?? 0;
+                    $inputTokens = ($aiResponse->usage->promptTokens ?? 0) + ($aiResponse->usage->cacheReadInputTokens ?? 0);
+                    $outputTokens = ($aiResponse->usage->completionTokens ?? 0) + ($aiResponse->usage->reasoningTokens ?? 0);
                     $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
 
                     $updates = [

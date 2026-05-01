@@ -17,8 +17,8 @@ use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::Anthropic)]
-#[Model('claude-3-5-sonnet-latest')]
+#[Provider(Lab::Gemini)]
+#[Model('gemini-2.5-flash')]
 #[Temperature(0.0)]
 #[Timeout(300)]
 #[MaxTokens(16000)]
@@ -30,7 +30,8 @@ class AhaAgent implements Agent, Conversational, HasTools
         public SafetyDocument $document,
         public string $regulations,
         public string $extraContext = ''
-    ) {}
+    ) {
+    }
 
     /**
      * Get the instructions that the agent should follow.
@@ -46,8 +47,8 @@ class AhaAgent implements Agent, Conversational, HasTools
 Project Context:
 - Company: {$this->document->company_name}
 - Project: {$this->document->project_name}
-- Description: ".($this->document->project_description ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS').'
-- Equipment & Tools: '.($this->document->equipment_tools ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS')."
+- Description: " . ($this->document->project_description ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS') . '
+- Equipment & Tools: ' . ($this->document->equipment_tools ?: 'NOT PROVIDED - PLEASE DERIVE FROM ATTACHED DOCUMENTS') . "
 - Project Location: {$this->document->project_location}
 - Applicable Regulations: {$this->regulations}
 
@@ -97,7 +98,7 @@ Output ONLY a valid JSON object (no markdown, no explanation) with SEVEN keys:
    8. Can damage to equipment occur?
    9. Can someone injure someone else?
 
-Generate exactly 12 to 14 detailed activity steps, and 3 competent person activities according to your analysis. Each step MUST have exactly 3-4 hazards with an equal number of matching controls (1-to-1 mapping). Ensure the output is thorough and professional, yet concise enough for rapid generation. Maintain professional safety terminology throughout.";
+Generate exactly 12 to 14 detailed activity steps, and 3 competent person activities according to your analysis. Each step MUST have exactly 5 hazards with an equal number of matching controls (1-to-1 mapping). Ensure the output is thorough and professional, yet concise enough for rapid generation. Maintain professional safety terminology throughout.";
     }
 
     /**

@@ -295,10 +295,10 @@ new #[Layout('layouts.safety')] class extends Component {
                     <tr class="bg-secondary/50 text-muted-foreground">
                         <th
                             class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50">
-                            Type</th>
+                            Project</th>
                         <th
                             class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50">
-                            Project</th>
+                            Type</th>
                         <th
                             class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50">
                             Company</th>
@@ -308,19 +308,18 @@ new #[Layout('layouts.safety')] class extends Component {
                         <th
                             class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50">
                             User</th>
-
                         <th
                             class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50">
                             Status</th>
                         <th
                             class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50 text-right">
-                            Tokens</th>
-                        <th
-                            class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50 text-right">
                             AI Cost</th>
                         <th
                             class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50 text-right">
-                            Price</th>
+                            Doc Price</th>
+                        <th
+                            class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50 text-right">
+                            Tokens</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-border/30">
@@ -341,13 +340,12 @@ new #[Layout('layouts.safety')] class extends Component {
                     @foreach($projects as $p)
 
                         <tr class="hover:bg-secondary/20 transition-colors">
+                            <td class="px-8 py-6 font-bold text-sm tracking-tight">{{ Str::limit($p->project_name, 40) }}</td>
                             <td class="px-8 py-6">
                                 <span
                                     class="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[9px] font-black uppercase tracking-widest">
                                     {{ $p->document_type }}
                                 </span>
-                            </td>
-                            <td class="px-8 py-6 font-bold text-sm tracking-tight">{{ Str::limit($p->project_name, 40) }}
                             </td>
                             <td class="px-8 py-6 text-muted-foreground text-xs font-black uppercase tracking-widest italic">
                                 {{ Str::limit($p->company_name, 30) }}
@@ -370,15 +368,17 @@ new #[Layout('layouts.safety')] class extends Component {
                                     {{ $p->is_paid ? 'Paid' : 'Unpaid' }}
                                 </span>
                             </td>
-                            <td class="px-8 py-6 text-right font-bold text-xs text-slate-500">
-                                <a href="{{ route('admin.usage', ['id' => $p->id]) }}" wire:navigate class="hover:text-primary hover:underline transition-colors">
-                                    {{ number_format($p->total_tokens) }}
-                                </a>
-                            </td>
                             <td class="px-8 py-6 text-right font-bold text-sm text-purple-600">
                                 ${{ number_format($p->total_ai_cost, 4) }}
                             </td>
                             <td class="px-8 py-6 text-right font-black text-sm">${{ $p->amount ?: '19.90' }}</td>
+                            <td class="px-8 py-6 text-right">
+                                <a href="{{ route('admin.usage', ['id' => $p->id]) }}" wire:navigate
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-600 border border-purple-200 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-all whitespace-nowrap">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                    {{ number_format($p->total_tokens) }} tokens
+                                </a>
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -412,10 +412,9 @@ new #[Layout('layouts.safety')] class extends Component {
                                 </h4>
                             </div>
                             <div class="text-right flex-shrink-0">
-                                <span
-                                    class="block font-black text-[14px] text-slate-900">${{ $p->amount ?: '19.90' }}</span>
-                                <span
-                                    class="text-[8px] font-black uppercase tracking-widest text-muted-foreground">{{ $p->created_at?->format('d M Y') }}</span>
+                                <span class="block font-black text-[14px] text-slate-900">${{ $p->amount ?: '19.90' }}</span>
+                                <span class="text-[8px] font-black uppercase tracking-widest text-emerald-600">Doc Price</span>
+                                <span class="block text-[8px] font-black uppercase tracking-widest text-muted-foreground mt-0.5">{{ $p->created_at?->format('d M Y') }}</span>
                             </div>
                         </div>
 
@@ -426,9 +425,9 @@ new #[Layout('layouts.safety')] class extends Component {
                                     {{ Str::limit($p->company_name, 35) }}</p>
                             </div>
                             <div class="flex items-center justify-between mt-2">
-                                <a href="{{ route('admin.usage', ['id' => $p->id]) }}" wire:navigate class="flex items-center gap-1.5 px-2 py-1 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-purple-100 hover:bg-purple-600 hover:text-white transition-all">
+                                <a href="{{ route('admin.usage', ['id' => $p->id]) }}" wire:navigate class="flex items-center gap-1.5 px-2 py-1 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-purple-100 hover:bg-purple-600 hover:text-white transition-all whitespace-nowrap">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                    Audit Usage: {{ number_format($p->total_tokens) }} tokens
+                                    {{ number_format($p->total_tokens) }} tokens
                                 </a>
                                 <span class="text-[9px] font-black text-purple-600/60 italic">${{ number_format($p->total_ai_cost, 4) }}</span>
                             </div>

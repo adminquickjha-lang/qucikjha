@@ -8,9 +8,13 @@ class AiPricingService
      * Calculate cost for Claude 3.5 Sonnet.
      * Prices per 1M tokens: $3.00 input, $15.00 output.
      */
-    public static function calculateCost(int $inputTokens, int $outputTokens, string $model = 'claude-3-5-sonnet'): float
+    public static function calculateCost(int $inputTokens, int $outputTokens, string $model = 'gemini-2.5-flash'): float
     {
         $prices = [
+            'gemini-2.5-flash' => [
+                'input' => 0.00000015,
+                'output' => 0.0000006,
+            ],
             'claude-3-5-sonnet' => [
                 'input' => 0.000003,
                 'output' => 0.000015,
@@ -33,7 +37,7 @@ class AiPricingService
             ],
         ];
 
-        $modelPrice = $prices[$model] ?? $prices['claude-3-5-sonnet'];
+        $modelPrice = $prices[$model] ?? $prices['gemini-2.5-flash'];
 
         return ($inputTokens * $modelPrice['input']) + ($outputTokens * $modelPrice['output']);
     }
