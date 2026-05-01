@@ -350,8 +350,8 @@ new #[Layout('layouts.safety')] class extends Component {
                             <td class="px-8 py-6 text-muted-foreground text-xs font-black uppercase tracking-widest italic">
                                 {{ Str::limit($p->company_name, 30) }}
                             </td>
-                            <td class="px-8 py-6 text-muted-foreground text-xs font-black uppercase tracking-widest italic">
-                                {{ Str::limit($p->created_at?->format('d-m-Y')) }}
+                            <td class="px-8 py-6 text-muted-foreground text-xs font-black uppercase tracking-widest italic whitespace-nowrap">
+                                {{ $p->created_at?->format('d-m-Y') }}
                             </td>
                             <td class="px-8 py-6 text-xs font-medium">
                                 <div class="flex items-center gap-2">

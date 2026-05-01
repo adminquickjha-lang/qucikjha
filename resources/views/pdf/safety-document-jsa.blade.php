@@ -189,7 +189,7 @@
             </td>
         </tr>
         <tr>
-            <td>
+            <td width="30%">
                 <span class="label">Developed by:</span>
                 <div class="value" style="word-break: break-all; word-wrap: break-word;">{{ Str::limit($document->prepared_by, 100) }}</div>
             </td>

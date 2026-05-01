@@ -591,13 +591,8 @@ new #[Layout('layouts.safety')] class extends Component {
                         class="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-in-out">
                     </div>
 
-                    <span wire:loading.remove wire:target="generate" class="relative z-10">
+                    <span class="relative z-10">
                         Produce Document
-                    </span>
-
-                    <span wire:loading wire:target="generate" class="relative z-10 flex items-center gap-2">
-                        <div class="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                        <!-- <span class="animate-pulse text-sm">Building...</span> -->
                     </span>
                 </button>
                 <p
@@ -608,7 +603,19 @@ new #[Layout('layouts.safety')] class extends Component {
         </div>
     </form>
 
-
+    <!-- Document Generation Overlay -->
+    <div wire:loading wire:target="generate"
+         x-data
+         x-init="new MutationObserver(() => { document.body.style.overflow = $el.style.display === 'none' ? '' : 'hidden'; }).observe($el, { attributes: true, attributeFilter: ['style'] })"
+         class="fixed inset-0 bg-black/60 z-[9999] backdrop-blur-sm"
+         style="display: none;">
+        <div class="absolute inset-0 flex flex-col items-center justify-center gap-8">
+            <div class="w-10 h-10 rounded-full border border-white/20 border-t-white animate-spin"></div>
+            <p class="text-white/90 text-sm font-medium tracking-widest uppercase flex items-center gap-0.5">
+                Please wait, your document is Creating<span class="doc-dot">.</span><span class="doc-dot">.</span><span class="doc-dot">.</span>
+            </p>
+        </div>
+    </div>
 
     <style>
         @keyframes float {
@@ -652,6 +659,20 @@ new #[Layout('layouts.safety')] class extends Component {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: #cbd5e1;
         }
+
+        @keyframes doc-dot-bounce {
+            0%, 100% { transform: translateY(0); opacity: 0.4; }
+            15% { transform: translateY(-6px); opacity: 1; }
+            30% { transform: translateY(0); opacity: 0.4; }
+        }
+        .doc-dot {
+            display: inline-block;
+            animation: doc-dot-bounce 1.8s infinite ease-in-out;
+            opacity: 0.4;
+        }
+        .doc-dot:nth-child(1) { animation-delay: 0s; }
+        .doc-dot:nth-child(2) { animation-delay: 0.6s; }
+        .doc-dot:nth-child(3) { animation-delay: 1.2s; }
     </style>
 
 </div>

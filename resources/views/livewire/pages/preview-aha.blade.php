@@ -976,95 +976,6 @@ on AHA. </p>
 
             </div>
 
-            {{-- Usage & History Section (Visible ONLY to Admin) --}}
-            @if(auth()->check() && auth()->user()->role === 'admin')
-            <div class="mt-12 bg-white rounded-3xl p-8 shadow-sm border border-slate-200/60 ring-1 ring-slate-100 print:hidden">
-                <div class="flex items-center justify-between mb-8">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10l4.5 4.5"/><circle cx="12" cy="12" r="10"/></svg>
-                        </div>
-                        <div>
-                            <h3 class="text-xl font-black text-slate-900 tracking-tight">Usage & Review History</h3>
-                            <p class="text-sm text-slate-500 font-medium italic">Track your AI token consumption and document iterations.</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-6 text-right">
-                        <div>
-                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Tokens Spent</span>
-                            <div class="text-xl font-bold text-slate-700">{{ number_format($project->total_tokens) }}</div>
-                        </div>
-                        <div>
-                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Total Document Spend</span>
-                            <div class="text-2xl font-black text-purple-600">${{ number_format($project->total_ai_cost, 4) }}</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="space-y-6">
-                    {{-- Initial Generation --}}
-                    <div class="flex gap-6 p-6 bg-slate-50/50 rounded-2xl border border-slate-100 transition-all hover:border-purple-200 group">
-                        <div class="flex-shrink-0 w-1 bg-purple-200 rounded-full group-hover:bg-purple-500 transition-colors"></div>
-                        <div class="flex-grow">
-                            <div class="flex justify-between items-start mb-2">
-                                <h4 class="font-black text-slate-900 uppercase tracking-tight text-sm italic">Initial Document Generation</h4>
-                                <span class="text-[10px] font-bold text-slate-400">{{ $project->created_at->format('M d, Y H:i') }}</span>
-                            </div>
-                            <div class="flex gap-8">
-                                <div>
-                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
-                                    <span class="text-sm font-bold text-slate-700">{{ number_format($project->input_tokens) }}</span>
-                                </div>
-                                <div>
-                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
-                                    <span class="text-sm font-bold text-slate-700">{{ number_format($project->output_tokens) }}</span>
-                                </div>
-                                <div>
-                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cost</span>
-                                    <span class="text-sm font-black text-purple-600">${{ number_format($project->cost, 4) }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- Automated Reviews History --}}
-                    @foreach($project->reviews()->latest()->get() as $idx => $review)
-                        <div class="flex gap-6 p-6 bg-white rounded-2xl border border-slate-100 transition-all hover:border-blue-200 group relative overflow-hidden">
-                            <div class="absolute top-0 right-0 p-3 bg-blue-50 text-blue-400 font-black text-[10px] uppercase tracking-widest rounded-bl-xl">Review #{{ $project->reviews()->count() - $idx }}</div>
-                            <div class="flex-shrink-0 w-1 bg-blue-200 rounded-full group-hover:bg-blue-500 transition-colors"></div>
-                            <div class="flex-grow">
-                                <div class="flex justify-between items-start mb-3">
-                                    <div>
-                                        <h4 class="font-black text-slate-900 uppercase tracking-tight text-sm italic mb-1">AI Automated Review</h4>
-                                        <p class="text-xs text-slate-600 font-medium bg-slate-50 p-3 rounded-xl border border-slate-100 ring-1 ring-slate-200/50 mt-2">
-                                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 opacity-60">Request:</span>
-                                            "{{ $review->prompt }}"
-                                        </p>
-                                    </div>
-                                </div>
-                                <div class="flex gap-8 mt-4 pt-4 border-t border-slate-100">
-                                    <div>
-                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Input Tokens</span>
-                                        <span class="text-sm font-bold text-slate-700">{{ number_format($review->input_tokens) }}</span>
-                                    </div>
-                                    <div>
-                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Output Tokens</span>
-                                        <span class="text-sm font-bold text-slate-700">{{ number_format($review->output_tokens) }}</span>
-                                    </div>
-                                    <div>
-                                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Cost</span>
-                                        <span class="text-sm font-black text-blue-600">${{ number_format($review->cost, 4) }}</span>
-                                    </div>
-                                    <div class="ml-auto text-right">
-                                        <span class="text-[10px] font-bold text-slate-400">{{ $review->created_at->format('M d, Y H:i') }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-            @endif
         </div>
 
     @if($showReviewModal)
@@ -1184,4 +1095,34 @@ on AHA. </p>
             </div>
         </div>
     @endif
+
+    <!-- Review Processing Overlay -->
+    <div wire:loading wire:target="review"
+         x-data
+         x-init="new MutationObserver(() => { document.body.style.overflow = $el.style.display === 'none' ? '' : 'hidden'; }).observe($el, { attributes: true, attributeFilter: ['style'] })"
+         class="fixed inset-0 bg-black/60 z-[9999] backdrop-blur-sm"
+         style="display: none;">
+        <div class="absolute inset-0 flex flex-col items-center justify-center gap-8">
+            <div class="w-10 h-10 rounded-full border border-white/20 border-t-white animate-spin"></div>
+            <p class="text-white/90 text-sm font-medium tracking-widest uppercase flex items-center gap-0.5">
+                Please wait, your document is Updating<span class="doc-dot">.</span><span class="doc-dot">.</span><span class="doc-dot">.</span>
+            </p>
+        </div>
+    </div>
+
+    <style>
+        @keyframes doc-dot-bounce {
+            0%, 100% { transform: translateY(0); opacity: 0.35; }
+            15%       { transform: translateY(-5px); opacity: 1; }
+            30%       { transform: translateY(0); opacity: 0.35; }
+        }
+        .doc-dot {
+            display: inline-block;
+            animation: doc-dot-bounce 1.8s infinite ease-in-out;
+            opacity: 0.35;
+        }
+        .doc-dot:nth-child(1) { animation-delay: 0s; }
+        .doc-dot:nth-child(2) { animation-delay: 0.6s; }
+        .doc-dot:nth-child(3) { animation-delay: 1.2s; }
+    </style>
 </div>
