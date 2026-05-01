@@ -123,8 +123,7 @@ new #[Layout('layouts.safety')] class extends Component {
 
         $isAdmin = auth()->check() && auth()->user()->role === 'admin';
 
-        $doc = \App\Models\SafetyDocument::create([
-            'user_id' => auth()->id(),
+        $tempDoc = new \App\Models\SafetyDocument([
             'company_name' => $this->company,
             'project_name' => $this->projectName,
             'project_location' => $this->location,
@@ -135,10 +134,6 @@ new #[Layout('layouts.safety')] class extends Component {
             'safety_coordinator' => $this->safetyCoordinator,
             'regulations' => $finalRegs,
             'document_type' => strtoupper($this->type),
-            'logo_path' => $logoPath,
-            'amount' => $isAdmin ? 0 : (float) str_replace('$', '', $this->typeInfo['price']),
-            'is_paid' => $isAdmin,
-            'download_ready' => $isAdmin,
         ]);
 
         $extraContext = "";
@@ -171,26 +166,16 @@ new #[Layout('layouts.safety')] class extends Component {
             }
         }
 
-        // Prepare regulations string
-        $allRegsFlat = collect($this->regulations())->flatten(1);
-        $regLabels = collect($doc->regulations ?? [])->map(function ($id) use ($allRegsFlat) {
-            $reg = $allRegsFlat->firstWhere('id', $id);
-            return $reg ? $reg['label'] : $id;
-        })->toArray();
-
-        if (in_array('custom', $doc->regulations ?? []) && $this->customRegText) {
-            $regLabels[] = $this->customRegText;
-        }
-        $regulationsStr = implode(', ', $regLabels);
+        $regulationsStr = implode(', ', $finalRegs);
 
         try {
-            $agent = new \App\Ai\Agents\JsaAgent($doc, $regulationsStr, $extraContext);
+            $agent = new \App\Ai\Agents\JsaAgent($tempDoc, $regulationsStr, $extraContext);
 
             $aiResponse = null;
             $lastException = null;
             for ($attempt = 1; $attempt <= 3; $attempt++) {
                 try {
-                    $aiResponse = $agent->prompt("Please generate the {$doc->document_type} JSON now based on the provided context.", attachments: $attachments);
+                    $aiResponse = $agent->prompt("Please generate the JSA JSON now based on the provided context.", attachments: $attachments);
                     break;
                 } catch (\Exception $e) {
                     $lastException = $e;
@@ -205,64 +190,59 @@ new #[Layout('layouts.safety')] class extends Component {
 
             $content = $aiResponse->text;
 
-            if ($content) {
-                // Extract JSON if it's wrapped in markdown code blocks
-                if (preg_match('/```json\s*(.*?)\s*```/s', $content, $matches)) {
-                    $content = $matches[1];
-                } elseif (preg_match('/```\s*(.*?)\s*```/s', $content, $matches)) {
-                    $content = $matches[1];
-                }
+            if (preg_match('/```json\s*(.*?)\s*```/s', $content, $matches)) {
+                $content = $matches[1];
+            } elseif (preg_match('/```\s*(.*?)\s*```/s', $content, $matches)) {
+                $content = $matches[1];
+            }
 
-                $decoded = json_decode($content, true);
+            $decoded = json_decode(trim($content), true);
 
-                if ($decoded) {
-                    $inputTokens = ($aiResponse->usage->promptTokens ?? 0) + ($aiResponse->usage->cacheReadInputTokens ?? 0);
-                    $outputTokens = ($aiResponse->usage->completionTokens ?? 0) + ($aiResponse->usage->reasoningTokens ?? 0);
-                    $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
-
-                    $updates = [
-                        'ai_response' => $decoded,
-                        'download_ready' => true,
-                        'input_tokens' => $inputTokens,
-                        'output_tokens' => $outputTokens,
-                        'cost' => $cost,
-                    ];
-
-                    // Always update with the AI-optimized/combined summary if available
-                    if (!empty($decoded['derived_description'])) {
-                        $updates['project_description'] = $decoded['derived_description'];
-                    }
-                    if (!empty($decoded['derived_equipment'])) {
-                        $updates['equipment_tools'] = $decoded['derived_equipment'];
-                    }
-
-                    $doc->update($updates);
-                } else {
-                    $doc->delete();
-                    $this->dispatch('swal', [
-                        'title' => 'Format Error',
-                        'text' => 'Please try again.',
-                        'icon' => 'error'
-                    ]);
-                    return;
-                }
-            } else {
-                $doc->delete();
+            $steps = $decoded['steps'] ?? $decoded['jsa_steps'] ?? $decoded['safety_steps'] ?? null;
+            if (!$decoded || empty($steps) || !is_array($steps)) {
+                if ($logoPath)
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($logoPath);
                 $this->dispatch('swal', [
-                    'title' => 'Empty Response',
-                    'text' => 'Please try again.',
+                    'title' => 'Incomplete Response',
+                    'text' => 'The AI returned an incomplete document. Please try again.',
                     'icon' => 'error'
                 ]);
                 return;
             }
+
+            $inputTokens = ($aiResponse->usage->promptTokens ?? 0) + ($aiResponse->usage->cacheReadInputTokens ?? 0);
+            $outputTokens = ($aiResponse->usage->completionTokens ?? 0) + ($aiResponse->usage->reasoningTokens ?? 0);
+            $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
+
+            $doc = \App\Models\SafetyDocument::create([
+                'user_id' => auth()->id(),
+                'company_name' => $this->company,
+                'project_name' => $this->projectName,
+                'project_location' => $this->location,
+                'project_description' => $decoded['derived_description'] ?? $this->projectDescription,
+                'equipment_tools' => $decoded['derived_equipment'] ?? $this->equipmentTools,
+                'prepared_by' => $this->preparedBy,
+                'competent_person' => $this->competentPerson,
+                'safety_coordinator' => $this->safetyCoordinator,
+                'regulations' => $finalRegs,
+                'document_type' => strtoupper($this->type),
+                'logo_path' => $logoPath,
+                'amount' => $isAdmin ? 0 : (float) str_replace('$', '', $this->typeInfo['price']),
+                'is_paid' => $isAdmin,
+                'download_ready' => true,
+                'ai_response' => $decoded,
+                'input_tokens' => $inputTokens,
+                'output_tokens' => $outputTokens,
+                'cost' => $cost,
+            ]);
+
         } catch (\Exception $e) {
-            if (isset($doc)) {
-                $doc->delete();
-            }
-            \Illuminate\Support\Facades\Log::error('Creation Error: ' . $e->getMessage());
+            if ($logoPath)
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($logoPath);
+            \Illuminate\Support\Facades\Log::error('JSA Creation Error: ' . $e->getMessage());
             $this->dispatch('swal', [
-                'title' => 'System Error',
-                'text' => 'Please try again.',
+                'title' => 'Creation Failed',
+                'text' => 'Something went wrong. Please try again.',
                 'icon' => 'error'
             ]);
             return;
@@ -604,15 +584,14 @@ new #[Layout('layouts.safety')] class extends Component {
     </form>
 
     <!-- Document Generation Overlay -->
-    <div wire:loading wire:target="generate"
-         x-data
-         x-init="new MutationObserver(() => { document.body.style.overflow = $el.style.display === 'none' ? '' : 'hidden'; }).observe($el, { attributes: true, attributeFilter: ['style'] })"
-         class="fixed inset-0 bg-black/60 z-[9999] backdrop-blur-sm"
-         style="display: none;">
+    <div wire:loading wire:target="generate" x-data
+        x-init="new MutationObserver(() => { document.body.style.overflow = $el.style.display === 'none' ? '' : 'hidden'; }).observe($el, { attributes: true, attributeFilter: ['style'] })"
+        class="fixed inset-0 bg-black/60 z-[9999] backdrop-blur-sm" style="display: none;">
         <div class="absolute inset-0 flex flex-col items-center justify-center gap-8">
             <div class="w-10 h-10 rounded-full border border-white/20 border-t-white animate-spin"></div>
             <p class="text-white/90 text-sm font-medium tracking-widest uppercase flex items-center gap-0.5">
-                Please wait, your document is Creating<span class="doc-dot">.</span><span class="doc-dot">.</span><span class="doc-dot">.</span>
+                Please wait, your document is Creating<span class="doc-dot">.</span><span class="doc-dot">.</span><span
+                    class="doc-dot">.</span>
             </p>
         </div>
     </div>
@@ -635,9 +614,15 @@ new #[Layout('layouts.safety')] class extends Component {
         }
 
         @keyframes spin-slow {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
         }
+
         .animate-spin-slow {
             animation: spin-slow 12s linear infinite;
         }
@@ -661,18 +646,41 @@ new #[Layout('layouts.safety')] class extends Component {
         }
 
         @keyframes doc-dot-bounce {
-            0%, 100% { transform: translateY(0); opacity: 0.4; }
-            15% { transform: translateY(-6px); opacity: 1; }
-            30% { transform: translateY(0); opacity: 0.4; }
+
+            0%,
+            100% {
+                transform: translateY(0);
+                opacity: 0.4;
+            }
+
+            15% {
+                transform: translateY(-6px);
+                opacity: 1;
+            }
+
+            30% {
+                transform: translateY(0);
+                opacity: 0.4;
+            }
         }
+
         .doc-dot {
             display: inline-block;
             animation: doc-dot-bounce 1.8s infinite ease-in-out;
             opacity: 0.4;
         }
-        .doc-dot:nth-child(1) { animation-delay: 0s; }
-        .doc-dot:nth-child(2) { animation-delay: 0.6s; }
-        .doc-dot:nth-child(3) { animation-delay: 1.2s; }
+
+        .doc-dot:nth-child(1) {
+            animation-delay: 0s;
+        }
+
+        .doc-dot:nth-child(2) {
+            animation-delay: 0.6s;
+        }
+
+        .doc-dot:nth-child(3) {
+            animation-delay: 1.2s;
+        }
     </style>
 
 </div>

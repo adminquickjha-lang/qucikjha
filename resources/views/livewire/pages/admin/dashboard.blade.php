@@ -30,9 +30,9 @@ new #[Layout('layouts.safety')] class extends Component {
         $this->resetPage();
     }
 
-    public function projects()
+    private function filteredQuery()
     {
-        return SafetyDocument::with('user')
+        return SafetyDocument::query()
             ->when($this->fromDate, fn($q) => $q->whereDate('created_at', '>=', $this->fromDate))
             ->when($this->toDate, fn($q) => $q->whereDate('created_at', '<=', $this->toDate))
             ->when($this->documentType !== 'all', fn($q) => $q->where('document_type', $this->documentType))
@@ -45,7 +45,13 @@ new #[Layout('layouts.safety')] class extends Component {
                                 ->orWhere('name', 'like', '%' . $this->search . '%');
                         });
                 });
-            })
+            });
+    }
+
+    public function projects()
+    {
+        return $this->filteredQuery()
+            ->with('user')
             ->latest()
             ->paginate(10);
     }
@@ -58,17 +64,19 @@ new #[Layout('layouts.safety')] class extends Component {
 
     public function stats()
     {
-        $totalOrders = SafetyDocument::count();
-        $paidOrdersCount = SafetyDocument::where('is_paid', true)->count();
-        $totalRevenue = SafetyDocument::where('is_paid', true)->sum('amount');
-        $downloads = SafetyDocument::where('download_ready', true)->count();
-        $totalAiCost = SafetyDocument::sum('cost') + \App\Models\DocumentReview::sum('cost');
+        $query = $this->filteredQuery();
+        $filteredIds = (clone $query)->pluck('id');
+
+        $totalRevenue = (clone $query)->where('is_paid', true)->sum('amount');
+        $downloads = (clone $query)->where('download_ready', true)->count();
+        $docCost = (clone $query)->sum('cost');
+        $reviewCost = \App\Models\DocumentReview::whereIn('safety_document_id', $filteredIds)->sum('cost');
+        $totalAiCost = $docCost + $reviewCost;
 
         return [
-            ['label' => 'Total Orders', 'value' => $totalOrders, 'icon' => 'file-text', 'color' => 'text-primary'],
+            ['label' => 'Documents Ready', 'value' => $downloads, 'icon' => 'download', 'color' => 'text-amber-500'],
             ['label' => 'Revenue', 'value' => '$' . number_format($totalRevenue, 2), 'icon' => 'dollar-sign', 'color' => 'text-emerald-500'],
             ['label' => 'AI Spend', 'value' => '$' . number_format($totalAiCost, 2), 'icon' => 'zap', 'color' => 'text-purple-500'],
-            ['label' => 'Docs Ready', 'value' => $downloads, 'icon' => 'download', 'color' => 'text-amber-500'],
         ];
     }
 }; ?>
@@ -165,7 +173,7 @@ new #[Layout('layouts.safety')] class extends Component {
     </div>
 
     <!-- Stats Row -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
         @foreach($this->stats() as $stat)
             <div class="card-surface p-6 flex items-center gap-5 hover:shadow-xl transition-all duration-300 group">
                 <div
@@ -186,7 +194,7 @@ new #[Layout('layouts.safety')] class extends Component {
                             <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                         </svg>
                     @elseif($stat['icon'] === 'trending-up')
-                            <path d="m22 7-8.5 15.5-5.5-5.5-6.5 6.5" />
+                        <path d="m22 7-8.5 15.5-5.5-5.5-6.5 6.5" />
                         </svg>
                     @elseif($stat['icon'] === 'zap')
                         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none"
@@ -225,7 +233,8 @@ new #[Layout('layouts.safety')] class extends Component {
             </div>
             <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search orders..."
                 class="w-full bg-transparent border-0 p-0 text-sm font-bold tracking-tight text-slate-900 placeholder:text-slate-400 focus:ring-0 outline-none md:hidden" />
-            <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search by project, company or user email..."
+            <input type="text" wire:model.live.debounce.300ms="search"
+                placeholder="Search by project, company or user email..."
                 class="hidden md:block w-full bg-transparent border-0 p-0 text-sm font-bold tracking-tight text-slate-900 placeholder:text-slate-400 placeholder:font-medium focus:ring-0 outline-none" />
         </div>
 
@@ -313,13 +322,10 @@ new #[Layout('layouts.safety')] class extends Component {
                             Status</th>
                         <th
                             class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50 text-right">
-                            AI Cost</th>
-                        <th
-                            class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50 text-right">
                             Doc Price</th>
                         <th
                             class="px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b border-border/50 text-right">
-                            Tokens</th>
+                            AI Usage</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-border/30">
@@ -328,11 +334,19 @@ new #[Layout('layouts.safety')] class extends Component {
                         <tr>
                             <td colspan="7" class="px-8 py-20 text-center">
                                 <div class="flex flex-col items-center gap-3">
-                                    <div class="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L15 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    <div
+                                        class="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L15 2z" />
+                                            <polyline points="14 2 14 8 20 8" />
+                                        </svg>
                                     </div>
-                                    <p class="text-sm font-black uppercase tracking-widest text-muted-foreground">No orders found</p>
-                                    <p class="text-xs text-muted-foreground font-medium">Try adjusting your date filters or check back later.</p>
+                                    <p class="text-sm font-black uppercase tracking-widest text-muted-foreground">No orders
+                                        found</p>
+                                    <p class="text-xs text-muted-foreground font-medium">Try adjusting your date filters or
+                                        check back later.</p>
                                 </div>
                             </td>
                         </tr>
@@ -340,7 +354,8 @@ new #[Layout('layouts.safety')] class extends Component {
                     @foreach($projects as $p)
 
                         <tr class="hover:bg-secondary/20 transition-colors">
-                            <td class="px-8 py-6 font-bold text-sm tracking-tight">{{ Str::limit($p->project_name, 40) }}</td>
+                            <td class="px-8 py-6 font-bold text-sm tracking-tight">{{ Str::limit($p->project_name, 40) }}
+                            </td>
                             <td class="px-8 py-6">
                                 <span
                                     class="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[9px] font-black uppercase tracking-widest">
@@ -350,7 +365,8 @@ new #[Layout('layouts.safety')] class extends Component {
                             <td class="px-8 py-6 text-muted-foreground text-xs font-black uppercase tracking-widest italic">
                                 {{ Str::limit($p->company_name, 30) }}
                             </td>
-                            <td class="px-8 py-6 text-muted-foreground text-xs font-black uppercase tracking-widest italic whitespace-nowrap">
+                            <td
+                                class="px-8 py-6 text-muted-foreground text-xs font-black uppercase tracking-widest italic whitespace-nowrap">
                                 {{ $p->created_at?->format('d-m-Y') }}
                             </td>
                             <td class="px-8 py-6 text-xs font-medium">
@@ -368,15 +384,17 @@ new #[Layout('layouts.safety')] class extends Component {
                                     {{ $p->is_paid ? 'Paid' : 'Unpaid' }}
                                 </span>
                             </td>
-                            <td class="px-8 py-6 text-right font-bold text-sm text-purple-600">
-                                ${{ number_format($p->total_ai_cost, 4) }}
-                            </td>
                             <td class="px-8 py-6 text-right font-black text-sm">${{ $p->amount ?: '19.90' }}</td>
                             <td class="px-8 py-6 text-right">
                                 <a href="{{ route('admin.usage', ['id' => $p->id]) }}" wire:navigate
                                     class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-600 border border-purple-200 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-all whitespace-nowrap">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                    {{ number_format($p->total_tokens) }} tokens
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24"
+                                        fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"
+                                        stroke-linejoin="round">
+                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                        <circle cx="12" cy="12" r="3" />
+                                    </svg>
+                                    AI Usage
                                 </a>
                             </td>
                         </tr>
@@ -391,65 +409,79 @@ new #[Layout('layouts.safety')] class extends Component {
             @if($projects->isEmpty())
                 <div class="p-10 flex flex-col items-center gap-3 text-center">
                     <div class="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center text-muted-foreground">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L15 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L15 2z" />
+                            <polyline points="14 2 14 8 20 8" />
+                        </svg>
                     </div>
                     <p class="text-sm font-black uppercase tracking-widest text-muted-foreground">No orders found</p>
-                    <p class="text-xs text-muted-foreground font-medium">Try adjusting your date filters or check back later.</p>
+                    <p class="text-xs text-muted-foreground font-medium">Try adjusting your date filters or check back
+                        later.</p>
                 </div>
             @else
-            <div class="p-4 space-y-4">
-                @foreach($projects as $p)
-                    <div
-                        class="bg-card border border-border/40 rounded-[2rem] p-6 shadow-sm hover:shadow-md transition-all duration-300">
-                        <div class="flex justify-between items-start gap-4 mb-5">
-                            <div class="space-y-1.5 flex-grow">
-                                <span
-                                    class="inline-flex px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[8px] font-black uppercase tracking-widest leading-none">
-                                    {{ $p->document_type }}
-                                </span>
-                                <h4 class="font-black text-[13px] tracking-tight leading-snug text-slate-900">
-                                    {{ Str::limit($p->project_name, 45) }}
-                                </h4>
+                <div class="p-4 space-y-4">
+                    @foreach($projects as $p)
+                        <div
+                            class="bg-card border border-border/40 rounded-[2rem] p-6 shadow-sm hover:shadow-md transition-all duration-300">
+                            <div class="flex justify-between items-start gap-4 mb-5">
+                                <div class="space-y-1.5 flex-grow">
+                                    <span
+                                        class="inline-flex px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[8px] font-black uppercase tracking-widest leading-none">
+                                        {{ $p->document_type }}
+                                    </span>
+                                    <h4 class="font-black text-[13px] tracking-tight leading-snug text-slate-900">
+                                        {{ Str::limit($p->project_name, 45) }}
+                                    </h4>
+                                </div>
+                                <div class="text-right flex-shrink-0">
+                                    <span
+                                        class="block font-black text-[14px] text-slate-900">${{ $p->amount ?: '19.90' }}</span>
+                                    <span class="text-[8px] font-black uppercase tracking-widest text-emerald-600">Doc
+                                        Price</span>
+                                    <span
+                                        class="block text-[8px] font-black uppercase tracking-widest text-muted-foreground mt-0.5">{{ $p->created_at?->format('d M Y') }}</span>
+                                </div>
                             </div>
-                            <div class="text-right flex-shrink-0">
-                                <span class="block font-black text-[14px] text-slate-900">${{ $p->amount ?: '19.90' }}</span>
-                                <span class="text-[8px] font-black uppercase tracking-widest text-emerald-600">Doc Price</span>
-                                <span class="block text-[8px] font-black uppercase tracking-widest text-muted-foreground mt-0.5">{{ $p->created_at?->format('d M Y') }}</span>
-                            </div>
-                        </div>
 
-                        <div class="grid grid-cols-1 gap-1.5 mb-5 opacity-80">
-                            <div class="flex items-center gap-2">
-                                <span class="w-1 h-1 rounded-full bg-slate-400"></span>
-                                <p class="text-[9px] font-bold tracking-tight uppercase text-slate-500 italic">
-                                    {{ Str::limit($p->company_name, 35) }}</p>
+                            <div class="grid grid-cols-1 gap-1.5 mb-5 opacity-80">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-1 h-1 rounded-full bg-slate-400"></span>
+                                    <p class="text-[9px] font-bold tracking-tight uppercase text-slate-500 italic">
+                                        {{ Str::limit($p->company_name, 35) }}
+                                    </p>
+                                </div>
+                                <div class="flex items-center justify-between mt-2">
+                                    <a href="{{ route('admin.usage', ['id' => $p->id]) }}" wire:navigate
+                                        class="flex items-center gap-1.5 px-2 py-1 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-purple-100 hover:bg-purple-600 hover:text-white transition-all whitespace-nowrap">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24"
+                                            fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                            <circle cx="12" cy="12" r="3" />
+                                        </svg>
+                                        AI Usage
+                                    </a>
+                                </div>
                             </div>
-                            <div class="flex items-center justify-between mt-2">
-                                <a href="{{ route('admin.usage', ['id' => $p->id]) }}" wire:navigate class="flex items-center gap-1.5 px-2 py-1 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black uppercase tracking-widest border border-purple-100 hover:bg-purple-600 hover:text-white transition-all whitespace-nowrap">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                    {{ number_format($p->total_tokens) }} tokens
-                                </a>
-                                <span class="text-[9px] font-black text-purple-600/60 italic">${{ number_format($p->total_ai_cost, 4) }}</span>
-                            </div>
-                        </div>
 
-                        <div class="flex justify-between items-center pt-5 border-t border-border/30">
-                            <div class="flex items-center gap-2.5">
-                                <div
-                                    class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[9px] font-black text-primary border border-primary/20">
-                                    {{ strtoupper(substr($p->user?->name ?? 'U', 0, 1)) }}
+                            <div class="flex justify-between items-center pt-5 border-t border-border/30">
+                                <div class="flex items-center gap-2.5">
+                                    <div
+                                        class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[9px] font-black text-primary border border-primary/20">
+                                        {{ strtoupper(substr($p->user?->name ?? 'U', 0, 1)) }}
+                                    </div>
+                                    <span
+                                        class="text-[9px] font-black uppercase tracking-widest text-slate-500">{{ Str::limit($p->user?->name ?? 'Unknown', 15) }}</span>
                                 </div>
                                 <span
-                                    class="text-[9px] font-black uppercase tracking-widest text-slate-500">{{ Str::limit($p->user?->name ?? 'Unknown', 15) }}</span>
+                                    class="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border {{ $p->is_paid ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100' }}">
+                                    {{ $p->is_paid ? 'Paid' : 'Unpaid' }}
+                                </span>
                             </div>
-                            <span
-                                class="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border {{ $p->is_paid ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100' }}">
-                                {{ $p->is_paid ? 'Paid' : 'Unpaid' }}
-                            </span>
                         </div>
-                    </div>
-                @endforeach
-            </div>
+                    @endforeach
+                </div>
             @endif
         </div>
         @if($projects->hasPages())

@@ -78,9 +78,8 @@ new #[Layout('layouts.safety')] class extends Component {
         $query = $this->filteredQuery();
 
         return [
-            ['label' => 'Total Documents', 'value' => (clone $query)->count(), 'icon' => 'file-text', 'color' => 'text-primary'],
-            ['label' => 'Created', 'value' => (clone $query)->where('download_ready', true)->count(), 'icon' => 'clock', 'color' => 'text-amber-500'],
-            ['label' => 'Paid', 'value' => (clone $query)->where('is_paid', true)->count(), 'icon' => 'credit-card', 'color' => 'text-blue-500'],
+            ['label' => 'Documents Created', 'value' => (clone $query)->where('download_ready', true)->count(), 'icon' => 'clock', 'color' => 'text-amber-500'],
+            ['label' => 'Documents Paid', 'value' => (clone $query)->where('is_paid', true)->count(), 'icon' => 'credit-card', 'color' => 'text-blue-500'],
         ];
     }
 }; ?>
@@ -176,7 +175,7 @@ new #[Layout('layouts.safety')] class extends Component {
         </div>
 
         <!-- Stats Row -->
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-6 mb-12">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
             @foreach($this->stats() as $stat)
                 <div class="card-surface p-6 flex items-center gap-5 hover:shadow-xl transition-all duration-300 group">
                     <div
@@ -423,7 +422,7 @@ new #[Layout('layouts.safety')] class extends Component {
                                 <div class="flex items-center justify-between pt-4 border-t border-slate-50">
                                     <div
                                         class="flex items-center gap-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                        <span class="flex items-center gap-1.5">
+                                        <span class="flex items-center gap-1.5 whitespace-nowrap">
                                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
                                                 fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
                                                 stroke-linejoin="round">
@@ -526,7 +525,7 @@ new #[Layout('layouts.safety')] class extends Component {
                                         <td class="px-8 py-6 text-slate-500 text-xs font-bold uppercase tracking-tight">
                                             {{ Str::limit($p->company_name, 40) }}
                                         </td>
-                                        <td class="px-8 py-6 text-slate-400 text-xs font-bold">
+                                        <td class="px-8 py-6 text-slate-400 text-xs font-bold whitespace-nowrap">
                                             {{ $p->created_at->format('M d, Y') }}
                                         </td>
                                         <td class="px-8 py-6">

@@ -235,8 +235,7 @@ new #[Layout('layouts.safety')] class extends Component {
                                         class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[9px] font-black uppercase tracking-widest">Pending</span>
                                 @elseif($r->progress == 2)
                                     <span
-                                        class="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-[9px] font-black uppercase tracking-widest">In
-                                        Progress</span>
+                                        class="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-[9px] font-black uppercase tracking-widest whitespace-nowrap">In Progress</span>
                                 @elseif($r->progress == 3)
                                     <span
                                         class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 text-[9px] font-black uppercase tracking-widest">Completed</span>
