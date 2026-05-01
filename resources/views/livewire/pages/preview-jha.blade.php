@@ -81,6 +81,34 @@ new #[Layout('layouts.safety')] class extends Component {
         if (!$this->paid)
             return;
         $this->isEditing = !$this->isEditing;
+        if (!$this->isEditing) {
+            $this->dispatch('edit-closed');
+        }
+    }
+
+    public function cancelEdit(): void
+    {
+        if (!$this->paid)
+            return;
+        // Re-read all fields from DB to revert user changes
+        $this->projectName = $this->project->project_name;
+        $this->projectLocation = $this->project->project_location;
+        $this->companyName = $this->project->company_name;
+        $this->preparedBy = $this->project->prepared_by;
+        $this->safetyCoordinator = $this->project->safety_coordinator;
+        $this->competentPerson = $this->project->competent_person;
+        $this->steps = $this->project->ai_response['steps'] ?? [];
+        foreach ($this->steps as &$step) {
+            $rawStep = $step['step_description'] ?? $step['step'] ?? '';
+            $step['step_description'] = preg_replace('/^\d+[\.\)]\s*/', '', $rawStep);
+        }
+        $this->competentActivities = $this->project->ai_response['competent_activities'] ?? [];
+        while (count($this->competentActivities) < 3) {
+            $this->competentActivities[] = ['activity' => '', 'person' => ''];
+        }
+        $this->equipment = $this->project->ai_response['equipment'] ?? [];
+        $this->isEditing = false;
+        $this->dispatch('edit-closed');
     }
 
     public function save()
@@ -104,6 +132,7 @@ new #[Layout('layouts.safety')] class extends Component {
         ]);
 
         $this->isEditing = false;
+        $this->dispatch('edit-closed');
         $this->dispatch('swal', ['title' => 'Saved!', 'text' => 'Document updated successfully!', 'icon' => 'success']);
     }
 
@@ -414,7 +443,7 @@ new #[Layout('layouts.safety')] class extends Component {
     }
 }; ?>
 
-<div x-data="{ reviewOpen: false, proReviewOpen: false }" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
+<div x-data="{ reviewOpen: false, proReviewOpen: false, isEditing: false }" x-on:edit-closed.window="isEditing = false" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
     <!-- Header Controls -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 print:hidden">
         <div class="flex-1 min-w-0">
@@ -438,50 +467,48 @@ new #[Layout('layouts.safety')] class extends Component {
         
         <div class="flex flex-col gap-3 w-full sm:w-fit">
             @if($paid)
-                @if($isEditing)
-                    <div class="flex flex-wrap gap-3 w-full">
-                        <button wire:click="save" wire:loading.attr="disabled" wire:target="save" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-60">
-                            <svg wire:loading.remove wire:target="save" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                            <svg wire:loading wire:target="save" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
-                            <span wire:loading.remove wire:target="save">Save</span>
-                            <span wire:loading wire:target="save">Saving...</span>
-                        </button>
-                        <button wire:click="toggleEdit" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
-                            Cancel
-                        </button>
-                    </div>
-                @else
-                    <div class="flex flex-wrap gap-3 w-full">
-                        <a href="{{ route('document.pdf', ['id' => $id]) }}" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                            PDF
-                        </a>
-                        <button wire:click="exportWord" wire:loading.attr="disabled" wire:target="exportWord" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-50 whitespace-nowrap">
-                            <svg wire:loading.remove wire:target="exportWord" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                            <svg wire:loading wire:target="exportWord" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
-                            <span wire:loading.remove wire:target="exportWord">Word</span>
-                            <span wire:loading wire:target="exportWord">Exporting...</span>
-                        </button>
-                        <button wire:click="toggleEdit" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                <div x-show="isEditing" class="flex flex-wrap gap-3 w-full" style="display:none;">
+                    <button wire:click="save" wire:loading.attr="disabled" wire:target="save" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-60">
+                        <svg wire:loading.remove wire:target="save" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        <svg wire:loading wire:target="save" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                        <span wire:loading.remove wire:target="save">Save</span>
+                        <span wire:loading wire:target="save">Saving...</span>
+                    </button>
+                    <button @click="isEditing = false" wire:click="cancelEdit" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
+                        Cancel
+                    </button>
+                </div>
+
+                <div x-show="!isEditing" class="flex flex-wrap gap-3 w-full">
+                    <a href="{{ route('document.pdf', ['id' => $id]) }}" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                        PDF
+                    </a>
+                    <button wire:click="exportWord" wire:loading.attr="disabled" wire:target="exportWord" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-50 whitespace-nowrap">
+                        <svg wire:loading.remove wire:target="exportWord" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        <svg wire:loading wire:target="exportWord" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                        <span wire:loading.remove wire:target="exportWord">Word</span>
+                        <span wire:loading wire:target="exportWord">Exporting...</span>
+                    </button>
+                    <button @click="isEditing = true" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        Edit
+                    </button>
+                </div>
+
+                <div x-show="!isEditing" class="flex flex-wrap gap-3 w-full">
+                    @if($reviewCount < 5)
+                        <button @click="reviewOpen = true" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            Edit
+                            Review ({{ 5 - $reviewCount }})
                         </button>
-                    </div>
+                    @endif
 
-                    <div class="flex flex-wrap gap-3 w-full">
-                        @if($reviewCount < 5)
-                            <button @click="reviewOpen = true" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                Review ({{ 5 - $reviewCount }})
-                            </button>
-                        @endif
-
-                        <button @click="proReviewOpen = true" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>
-                            Professional Review ($5)
-                        </button>
-                    </div>
-                @endif
+                    <button @click="proReviewOpen = true" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>
+                        Professional Review ($5)
+                    </button>
+                </div>
             @else
                 <button wire:click="handlePayment('paypal')" class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
@@ -498,6 +525,9 @@ new #[Layout('layouts.safety')] class extends Component {
 
     <!-- Document Rendering Container -->
         <div class="relative">
+        <div wire:loading wire:target="toggleEdit,cancelEdit,save" class="fixed inset-0 bg-white/60 z-[100] flex items-center justify-center print:hidden">
+            <svg class="animate-spin text-primary" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+        </div>
         @if(!$paid)
             <div class="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none overflow-hidden print:hidden">
                 <div class="bg-foreground text-background px-12 py-5 rounded-3xl font-black shadow-2xl rotate-[-7deg] text-2xl tracking-[0.3em] uppercase opacity-90 scale-110">
@@ -555,17 +585,15 @@ new #[Layout('layouts.safety')] class extends Component {
                     @if($logoSrc)
                         <img src="{{ $logoSrc }}" class="max-h-20 w-auto object-contain" alt="Logo" />
                     @endif
-                    @if($isEditing)
-                        <div class="mt-2 print:hidden">
-                            <label class="cursor-pointer inline-flex items-center gap-2 text-xs font-bold text-primary border border-primary rounded-lg px-3 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                                {{ $logoSrc ? 'Change Logo' : 'Upload Logo' }}
-                                <input type="file" wire:model="newLogo" accept="image/*" class="hidden">
-                            </label>
-                            <div wire:loading wire:target="newLogo" class="text-xs text-gray-500 mt-1">Uploading...</div>
-                            @error('newLogo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-                        </div>
-                    @endif
+                    <div x-show="isEditing" class="mt-2 print:hidden" style="display:none;">
+                        <label class="cursor-pointer inline-flex items-center gap-2 text-xs font-bold text-primary border border-primary rounded-lg px-3 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                            {{ $logoSrc ? 'Change Logo' : 'Upload Logo' }}
+                            <input type="file" wire:model="newLogo" accept="image/*" class="hidden">
+                        </label>
+                        <div wire:loading wire:target="newLogo" class="text-xs text-gray-500 mt-1">Uploading...</div>
+                        @error('newLogo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                    </div>
                 </div>
 
                 {{-- Title Section --}}
@@ -583,32 +611,23 @@ new #[Layout('layouts.safety')] class extends Component {
                                     <tr>
                                         <td style="padding: 6px; border-bottom: 1px solid #000; font-size: 16px; word-break: normal; overflow-wrap: anywhere;">
                                             Project Name:
-                                            @if($isEditing)
-                                                <input type="text" wire:model="projectName" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
-                                            @else
-                                                <strong class="text-[16px]">{{ Str::limit($projectName, 100) }}</strong>
-                                            @endif
+                                            <input x-show="isEditing" type="text" wire:model="projectName" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]" style="display:none;">
+                                            <strong x-show="!isEditing" class="text-[16px]">{{ Str::limit($projectName, 100) }}</strong>
                                         </td>
                                     </tr>
                                     <tr>
                                         <td style="padding: 6px; border-bottom: 1px solid #000; font-size: 16px; word-break: normal; overflow-wrap: anywhere;">
-                                            Project Location: 
-                                            @if($isEditing)
-                                                <input type="text" wire:model="projectLocation" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
-                                            @else
-                                                <strong class="text-[16px]">{{ Str::limit($projectLocation, 100) }}</strong>
-                                            @endif
+                                            Project Location:
+                                            <input x-show="isEditing" type="text" wire:model="projectLocation" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]" style="display:none;">
+                                            <strong x-show="!isEditing" class="text-[16px]">{{ Str::limit($projectLocation, 100) }}</strong>
                                         </td>
                                     </tr>
 
                                     <tr>
                                         <td style="padding: 6px; border-bottom: 1px solid #000; font-size: 16px; word-break: normal; overflow-wrap: anywhere;">
-                                              Company Name : 
-                                              @if($isEditing)
-                                                <input type="text" wire:model="companyName" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
-                                            @else
-                                                <strong class="text-[16px]">{{ Str::limit($companyName ?? '—', 100) }}</strong>
-                                              @endif
+                                              Company Name :
+                                              <input x-show="isEditing" type="text" wire:model="companyName" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]" style="display:none;">
+                                              <strong x-show="!isEditing" class="text-[16px]">{{ Str::limit($companyName ?? '—', 100) }}</strong>
                                         </td>
                                         </td>
 
@@ -620,32 +639,23 @@ new #[Layout('layouts.safety')] class extends Component {
                                     </tr>
                                     <tr>
                                         <td style="padding: 6px; border-bottom: 1px solid #000; font-size: 16px; word-break: normal; overflow-wrap: anywhere;">
-                                            Prepared By (Name/Title): 
-                                            @if($isEditing)
-                                                <input type="text" wire:model="preparedBy" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
-                                            @else
-                                                <strong class="text-[16px]">{{ Str::limit($preparedBy ?? '—', 100) }}</strong>
-                                            @endif
+                                            Prepared By (Name/Title):
+                                            <input x-show="isEditing" type="text" wire:model="preparedBy" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]" style="display:none;">
+                                            <strong x-show="!isEditing" class="text-[16px]">{{ Str::limit($preparedBy ?? '—', 100) }}</strong>
                                         </td>
                                     </tr>
                                     <tr>
                                         <td style="padding: 6px; border-bottom: 1px solid #000; font-size: 16px; word-break: normal; overflow-wrap: anywhere;">
-                                            Reviewed By (Name/Title): 
-                                            @if($isEditing)
-                                                <input type="text" wire:model="safetyCoordinator" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
-                                            @else
-                                                <strong class="text-[16px]">{{ Str::limit($safetyCoordinator ?? '—', 100) }}</strong>
-                                            @endif
+                                            Reviewed By (Name/Title):
+                                            <input x-show="isEditing" type="text" wire:model="safetyCoordinator" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]" style="display:none;">
+                                            <strong x-show="!isEditing" class="text-[16px]">{{ Str::limit($safetyCoordinator ?? '—', 100) }}</strong>
                                         </td>
                                     </tr>
                                 <tr>
                                     <td style="padding: 6px; font-size: 16px; line-height: 1.2; word-break: normal; overflow-wrap: anywhere;">
-                                             Competent person: 
-                                             @if($isEditing)
-                                                <input type="text" wire:model="competentPerson" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]">
-                                             @else
-                                                <strong class="text-[16px]">{{ Str::limit($competentPerson ?? '—', 100) }}</strong>
-                                             @endif
+                                             Competent person:
+                                             <input x-show="isEditing" type="text" wire:model="competentPerson" class="border-0 p-0 font-bold w-full focus:ring-0 text-[16px]" style="display:none;">
+                                             <strong x-show="!isEditing" class="text-[16px]">{{ Str::limit($competentPerson ?? '—', 100) }}</strong>
                                         </td>
                                 <tr>
                                     
@@ -787,9 +797,7 @@ on JHA. </p>
                             <th class="px-3 py-3 border border-gray-400 text-center w-64 text-[16px]">Hazards</th>
                             <th class="px-3 py-3 border border-gray-400 text-center text-[16px]">Risk Controls</th>
                             <th class="px-3 py-3 border border-gray-400 text-center w-16 text-[16px]">RAC</th>
-                            @if($isEditing)
-                                <th class="px-2 py-3 border border-gray-400 w-10 print:hidden"></th>
-                            @endif
+                            <th x-show="isEditing" class="px-2 py-3 border border-gray-400 w-10 print:hidden" style="display:none;"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -797,14 +805,11 @@ on JHA. </p>
                         <tr class="bg-white" wire:key="step-{{ $i }}">
                             <td class="px-3 py-3 border border-gray-300 font-bold text-gray-900 align-top">
                                 {{ $i + 1 }}.
-                                @if($isEditing)
-                                    <textarea wire:model="steps.{{ $i }}.step_description" class="w-full border-0 p-0 focus:ring-0 font-bold bg-transparent resize-none" rows="3"></textarea>
-                                @else
-                                    {{ preg_replace('/^(?:Step\s*\d+[\.\:\-\s]*|\d+[\.\-\s]+)+/i', '', $h['step_description'] ?? $h['step'] ?? 'N/A') }}
-                                @endif
+                                <textarea x-show="isEditing" wire:model="steps.{{ $i }}.step_description" class="w-full border-0 p-0 focus:ring-0 font-bold bg-transparent resize-none" rows="3" style="display:none;"></textarea>
+                                <span x-show="!isEditing">{{ preg_replace('/^(?:Step\s*\d+[\.\:\-\s]*|\d+[\.\-\s]+)+/i', '', $h['step_description'] ?? $h['step'] ?? 'N/A') }}</span>
                             </td>
                             <td class="px-3 py-3 border border-gray-300 align-top text-black">
-                                @if($isEditing)
+                                <div x-show="isEditing" style="display:none;">
                                     @if(is_array($h['hazards']))
                                         <ol class="list-decimal ml-4 space-y-2">
                                             @foreach($h['hazards'] as $hj => $hazard)
@@ -823,14 +828,15 @@ on JHA. </p>
                                     @else
                                         <textarea wire:model="steps.{{ $i }}.hazards" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
                                     @endif
-                                @else
+                                </div>
+                                <div x-show="!isEditing">
                                     @if(is_array($h['hazards']))
                                         <ol class="list-decimal ml-3 space-y-2">@foreach($h['hazards'] as $hazard)<li>{{ $hazard }}</li>@endforeach</ol>
                                     @else {!! nl2br(e($h['hazards'] ?? $h['hazard'] ?? 'N/A')) !!} @endif
-                                @endif
+                                </div>
                             </td>
                             <td class="px-3 py-3 border border-gray-300 align-top text-black">
-                                @if($isEditing)
+                                <div x-show="isEditing" style="display:none;">
                                     @if(is_array($h['controls']))
                                         <ol class="list-decimal ml-4 space-y-2">
                                             @foreach($h['controls'] as $hc => $control)
@@ -849,11 +855,12 @@ on JHA. </p>
                                     @else
                                         <textarea wire:model="steps.{{ $i }}.controls" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
                                     @endif
-                                @else
+                                </div>
+                                <div x-show="!isEditing">
                                     @if(is_array($h['controls']))
                                         <ol class="list-decimal ml-3 space-y-2">@foreach($h['controls'] as $control)<li>{{ $control }}</li>@endforeach</ol>
                                     @else {!! nl2br(e($h['controls'] ?? $h['control'] ?? 'N/A')) !!} @endif
-                                @endif
+                                </div>
                             </td>
                             @php
                                 $initialRacRaw = $h['initial_rac'] ?? $h['rac'] ?? $h['risk'] ?? 'N/A';
@@ -862,38 +869,31 @@ on JHA. </p>
                                 $initialRacColor = $racColors[$initialRacChar] ?? '#9ca3af';
                                 $initialTextColor = in_array($initialRacChar, ['M', 'L']) ? '#000' : '#fff';
                             @endphp
-                            <td class="border border-gray-300 text-center align-middle font-black text-[14px]" style="background-color: {{ $isEditing ? '#fff' : $initialRacColor }}; color: {{ $isEditing ? '#000' : $initialTextColor }}; width: 70px;">
-                                @if($isEditing)
-                                    <select wire:model.live="steps.{{ $i }}.initial_rac"
-                                        class="w-full text-sm font-bold border border-gray-400 rounded px-1 py-1.5 focus:ring-1 focus:ring-blue-500 bg-white text-black cursor-pointer">
-                                        <option value="E" style="background:#c0392b;color:#fff;">E — Extreme</option>
-                                        <option value="H" style="background:#e67e22;color:#fff;">H — High</option>
-                                        <option value="M" style="background:#f1c40f;color:#000;">M — Medium</option>
-                                        <option value="L" style="background:#27ae60;color:#fff;">L — Low</option>
-                                    </select>
-                                @else
-                                    {{ $initialRac }}
-                                @endif
+                            <td class="border border-gray-300 text-center align-middle font-black text-[14px]" :style="isEditing ? 'background-color: #fff; color: #000;' : 'background-color: {{ $initialRacColor }}; color: {{ $initialTextColor }};'" style="width: 70px;">
+                                <select x-show="isEditing" wire:model.live="steps.{{ $i }}.initial_rac"
+                                    class="w-full text-sm font-bold border border-gray-400 rounded px-1 py-1.5 focus:ring-1 focus:ring-blue-500 bg-white text-black cursor-pointer" style="display:none;">
+                                    <option value="E" style="background:#c0392b;color:#fff;">E — Extreme</option>
+                                    <option value="H" style="background:#e67e22;color:#fff;">H — High</option>
+                                    <option value="M" style="background:#f1c40f;color:#000;">M — Medium</option>
+                                    <option value="L" style="background:#27ae60;color:#fff;">L — Low</option>
+                                </select>
+                                <span x-show="!isEditing">{{ $initialRac }}</span>
                             </td>
-                            @if($isEditing)
-                                <td class="border border-gray-300 p-2 align-top print:hidden">
-                                    <button wire:click="deleteStep({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                    </button>
-                                </td>
-                            @endif
+                            <td x-show="isEditing" class="border border-gray-300 p-2 align-top print:hidden" style="display:none;">
+                                <button wire:click="deleteStep({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                </button>
+                            </td>
                         </tr>
                     @endforeach
                     </tbody>
                 </table>
             </div>
-            @if($isEditing)
-                <button wire:click="addStep" type="button"
-                    class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                    Add Step
-                </button>
-            @endif
+            <button x-show="isEditing" wire:click="addStep" type="button"
+                class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden" style="display:none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                Add Step
+            </button>
 
             {{-- Equipment Table --}}
             <div class="text-white font-black text-[16px] px-4 py-2.5 tracking-widest uppercase mt-6 text-center" style="background-color: {{ $headerColor }}">
@@ -905,116 +905,87 @@ on JHA. </p>
                         <th class="px-3 py-2 border border-gray-400 text-center w-1/3 text-[16px]">Equipment to be Used</th>
                         <th class="px-3 py-2 border border-gray-400 text-center w-1/3 text-[16px]">Training Required</th>
                         <th class="px-3 py-2 border border-gray-400 text-center w-1/3 text-[16px]">Inspection Requirements</th>
-                        @if($isEditing)
-                            <th class="px-2 py-2 border border-gray-400 w-10 print:hidden"></th>
-                        @endif
+                        <th x-show="isEditing" class="px-2 py-2 border border-gray-400 w-10 print:hidden" style="display:none;"></th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($equipment as $i => $eq)
                         <tr class="{{ $i % 2 === 1 ? 'bg-gray-50' : 'bg-white' }}">
                             <td class="px-3 py-2.5 border border-gray-300 text-black">
-                                @if($isEditing)
-                                    <input type="text" wire:model="equipment.{{ $i }}.equipment" class="w-full border-0 p-0 focus:ring-0 bg-transparent">
-                                @else
-                                    {{ $eq['equipment'] ?? '' }}
-                                @endif
+                                <input x-show="isEditing" type="text" wire:model="equipment.{{ $i }}.equipment" class="w-full border-0 p-0 focus:ring-0 bg-transparent" style="display:none;">
+                                <span x-show="!isEditing">{{ $eq['equipment'] ?? '' }}</span>
                             </td>
                             <td class="px-3 py-2.5 border border-gray-300 text-black">
-                                @if($isEditing)
-                                    <input type="text" wire:model="equipment.{{ $i }}.training" class="w-full border-0 p-0 focus:ring-0 bg-transparent">
-                                @else
-                                    {{ $eq['training'] ?? '' }}
-                                @endif
+                                <input x-show="isEditing" type="text" wire:model="equipment.{{ $i }}.training" class="w-full border-0 p-0 focus:ring-0 bg-transparent" style="display:none;">
+                                <span x-show="!isEditing">{{ $eq['training'] ?? '' }}</span>
                             </td>
                             <td class="px-3 py-2.5 border border-gray-300 text-black">
-                                @if($isEditing)
-                                    <input type="text" wire:model="equipment.{{ $i }}.inspection" class="w-full border-0 p-0 focus:ring-0 bg-transparent">
-                                @else
-                                    {{ $eq['inspection'] ?? '' }}
-                                @endif
+                                <input x-show="isEditing" type="text" wire:model="equipment.{{ $i }}.inspection" class="w-full border-0 p-0 focus:ring-0 bg-transparent" style="display:none;">
+                                <span x-show="!isEditing">{{ $eq['inspection'] ?? '' }}</span>
                             </td>
-                            @if($isEditing)
-                                <td class="border border-gray-300 p-2 align-middle print:hidden">
-                                    <button wire:click="deleteEquipment({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                    </button>
-                                </td>
-                            @endif
+                            <td x-show="isEditing" class="border border-gray-300 p-2 align-middle print:hidden" style="display:none;">
+                                <button wire:click="deleteEquipment({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                </button>
+                            </td>
                         </tr>
                     @empty
                         <tr class="bg-white">
-                            <td colspan="{{ $isEditing ? 4 : 3 }}" class="px-3 py-4 border border-gray-300 text-center text-gray-500 italic">Equipment details not specified.</td>
+                            <td :colspan="isEditing ? 4 : 3" class="px-3 py-4 border border-gray-300 text-center text-gray-500 italic">Equipment details not specified.</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
-            @if($isEditing)
-                <button wire:click="addEquipment" type="button"
-                    class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                    Add Equipment
-                </button>
-            @endif
+            <button x-show="isEditing" wire:click="addEquipment" type="button"
+                class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden" style="display:none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                Add Equipment
+            </button>
 
             <table class="w-full border-collapse text-[13px] mt-6">
                 <thead>
                     <tr class="text-white text-[11px] font-black uppercase" style="background-color: {{ $headerColor }}">
-                        <th colspan="{{ $isEditing ? 3 : 2 }}" class="px-4 py-3 border border-blue-400/30 text-center text-[16px]">
+                        <th :colspan="isEditing ? 3 : 2" class="px-4 py-3 border border-blue-400/30 text-center text-[16px]">
                             Activities Requiring a Competent or Qualified Person – Attach Proof of Competency
                         </th>
                     </tr>
                     <tr class="text-white text-[11px] font-black uppercase" style="background-color: {{ $tableHeaderColor }}">
                         <th class="px-3 py-2 border border-gray-400 text-center w-1/2 text-[16px]">Activity</th>
                         <th class="px-3 py-2 border border-gray-400 text-center w-1/2 text-[16px]">Designated Competent or Qualified Person</th>
-                        @if($isEditing)
-                            <th class="px-2 py-2 border border-gray-400 w-10 print:hidden"></th>
-                        @endif
+                        <th x-show="isEditing" class="px-2 py-2 border border-gray-400 w-10 print:hidden" style="display:none;"></th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($competentActivities as $i => $act)
                         <tr class="{{ $i % 2 === 1 ? 'bg-gray-50' : 'bg-white' }}">
                             <td class="px-3 py-2.5 border border-gray-300 font-bold text-black">
-                                @if($isEditing)
-                                    <input type="text" wire:model="competentActivities.{{ $i }}.activity" class="w-full border-0 p-0 focus:ring-0 bg-transparent font-bold">
-                                @else
-                                    {{ $act['activity'] ?? 'General Supervision' }}
-                                @endif
+                                <input x-show="isEditing" type="text" wire:model="competentActivities.{{ $i }}.activity" class="w-full border-0 p-0 focus:ring-0 bg-transparent font-bold" style="display:none;">
+                                <span x-show="!isEditing">{{ $act['activity'] ?? 'General Supervision' }}</span>
                             </td>
                             <td class="px-3 py-2.5 border border-gray-300 text-black">
-                                @if($isEditing)
-                                    <input type="text" wire:model="competentActivities.{{ $i }}.person" class="w-full border-0 p-0 focus:ring-0 bg-transparent">
-                                @else
-                                    {{ $act['person'] ?? 'On-site Supervisor' }}
-                                @endif
+                                <input x-show="isEditing" type="text" wire:model="competentActivities.{{ $i }}.person" class="w-full border-0 p-0 focus:ring-0 bg-transparent" style="display:none;">
+                                <span x-show="!isEditing">{{ $act['person'] ?? 'On-site Supervisor' }}</span>
                             </td>
-                            @if($isEditing)
-                                <td class="border border-gray-300 p-2 align-middle print:hidden">
-                                    <button wire:click="deleteCompetentActivity({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                    </button>
-                                </td>
-                            @endif
+                            <td x-show="isEditing" class="border border-gray-300 p-2 align-middle print:hidden" style="display:none;">
+                                <button wire:click="deleteCompetentActivity({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                </button>
+                            </td>
                         </tr>
                     @empty
                         <tr class="bg-white">
                             <td class="px-3 py-2.5 border border-gray-300 font-bold text-black">General Safety Oversight</td>
                             <td class="px-3 py-2.5 border border-gray-300 text-black">{{ $project->competent_person ?? 'To be designated' }}</td>
-                            @if($isEditing)
-                                <td class="border border-gray-300 p-2 print:hidden"></td>
-                            @endif
+                            <td x-show="isEditing" class="border border-gray-300 p-2 print:hidden" style="display:none;"></td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
-            @if($isEditing)
-                <button wire:click="addCompetentActivity" type="button"
-                    class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                    Add Activity
-                </button>
-            @endif
+            <button x-show="isEditing" wire:click="addCompetentActivity" type="button"
+                class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden" style="display:none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                Add Activity
+            </button>
 
             {{-- Signatures --}}
             <div class="text-white font-black text-[16px] px-4 py-2.5 tracking-widest uppercase text-center" style="background-color: {{ $headerColor }}">

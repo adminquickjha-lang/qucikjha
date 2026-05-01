@@ -99,6 +99,33 @@ new #[Layout('layouts.safety')] class extends Component {
         if (!$this->paid)
             return;
         $this->isEditing = !$this->isEditing;
+        if (!$this->isEditing) {
+            $this->dispatch('edit-closed');
+        }
+    }
+
+    public function cancelEdit(): void
+    {
+        if (!$this->paid)
+            return;
+        // Re-read all fields from DB to revert user changes
+        $this->projectName = $this->project->project_name;
+        $this->projectLocation = $this->project->project_location;
+        $this->companyName = $this->project->company_name;
+        $this->preparedBy = $this->project->prepared_by;
+        $this->competentPerson = $this->project->competent_person;
+        $this->steps = $this->project->ai_response['steps'] ?? [];
+        foreach ($this->steps as &$step) {
+            $rawStep = $step['step_description'] ?? $step['step'] ?? '';
+            $step['step_description'] = preg_replace('/^\d+[\.\)]\s*/', '', $rawStep);
+        }
+        $this->competentActivities = $this->project->ai_response['competent_activities'] ?? [];
+        while (count($this->competentActivities) < 3) {
+            $this->competentActivities[] = ['activity' => '', 'person' => ''];
+        }
+        $this->equipment = $this->project->ai_response['equipment'] ?? [];
+        $this->isEditing = false;
+        $this->dispatch('edit-closed');
     }
 
     public function save()
@@ -125,6 +152,7 @@ new #[Layout('layouts.safety')] class extends Component {
         ]);
 
         $this->isEditing = false;
+        $this->dispatch('edit-closed');
         $this->dispatch('swal', ['title' => 'Success!', 'text' => 'Document updated successfully!', 'icon' => 'success']);
     }
 
@@ -425,7 +453,7 @@ new #[Layout('layouts.safety')] class extends Component {
     }
 }; ?>
 
-<div x-data="{ reviewOpen: false, proReviewOpen: false }" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
+<div x-data="{ reviewOpen: false, proReviewOpen: false, isEditing: false }" x-on:edit-closed.window="isEditing = false" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
     <!-- Header Controls -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 print:hidden">
         <div class="flex-1 min-w-0">
@@ -460,99 +488,97 @@ new #[Layout('layouts.safety')] class extends Component {
 
         <div class="flex flex-col gap-3 w-full sm:w-fit">
             @if($paid)
-                @if($isEditing)
-                    <div class="flex flex-wrap gap-3 w-full">
-                        <button wire:click="save" wire:loading.attr="disabled" wire:target="save"
-                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-60">
-                            <svg wire:loading.remove wire:target="save" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                                <polyline points="17 21 17 13 7 13 7 21" />
-                                <polyline points="7 3 7 8 15 8" />
-                            </svg>
-                            <svg wire:loading wire:target="save" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
-                            <span wire:loading.remove wire:target="save">Save</span>
-                            <span wire:loading wire:target="save">Saving...</span>
-                        </button>
-                        <button wire:click="toggleEdit"
-                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
-                            Cancel
-                        </button>
-                    </div>
-                @else
-                    <div class="flex flex-wrap gap-3 w-full">
-                        <a href="{{ route('document.pdf', ['id' => $id]) }}"
-                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="7 10 12 15 17 10" />
-                                <line x1="12" x2="12" y1="15" y2="3" />
-                            </svg>
-                            PDF
-                        </a>
-                        <button wire:click="exportWord" wire:loading.attr="disabled" wire:target="exportWord"
-                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-50 whitespace-nowrap">
-                            <svg wire:loading.remove wire:target="exportWord" xmlns="http://www.w3.org/2000/svg" width="18"
-                                height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-                                stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                                <line x1="16" y1="13" x2="8" y2="13" />
-                                <line x1="16" y1="17" x2="8" y2="17" />
-                                <polyline points="10 9 9 9 8 9" />
-                            </svg>
-                            <svg wire:loading wire:target="exportWord" class="animate-spin" xmlns="http://www.w3.org/2000/svg"
-                                width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
-                                stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="12" y1="2" x2="12" y2="6" />
-                                <line x1="12" y1="18" x2="12" y2="22" />
-                                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-                                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-                                <line x1="2" y1="12" x2="6" y2="12" />
-                                <line x1="18" y1="12" x2="22" y2="12" />
-                                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
-                                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
-                            </svg>
-                            <span wire:loading.remove wire:target="exportWord">Word</span>
-                            <span wire:loading wire:target="exportWord">Exporting...</span>
-                        </button>
-                        <button wire:click="toggleEdit"
+                <div x-show="isEditing" class="flex flex-wrap gap-3 w-full" style="display:none;">
+                    <button wire:click="save" wire:loading.attr="disabled" wire:target="save"
+                        class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-60">
+                        <svg wire:loading.remove wire:target="save" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                            <polyline points="17 21 17 13 7 13 7 21" />
+                            <polyline points="7 3 7 8 15 8" />
+                        </svg>
+                        <svg wire:loading wire:target="save" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                        <span wire:loading.remove wire:target="save">Save</span>
+                        <span wire:loading wire:target="save">Saving...</span>
+                    </button>
+                    <button @click="isEditing = false" wire:click="cancelEdit"
+                        class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
+                        Cancel
+                    </button>
+                </div>
+
+                <div x-show="!isEditing" class="flex flex-wrap gap-3 w-full">
+                    <a href="{{ route('document.pdf', ['id' => $id]) }}"
+                        class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" x2="12" y1="15" y2="3" />
+                        </svg>
+                        PDF
+                    </a>
+                    <button wire:click="exportWord" wire:loading.attr="disabled" wire:target="exportWord"
+                        class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-50 whitespace-nowrap">
+                        <svg wire:loading.remove wire:target="exportWord" xmlns="http://www.w3.org/2000/svg" width="18"
+                            height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <polyline points="10 9 9 9 8 9" />
+                        </svg>
+                        <svg wire:loading wire:target="exportWord" class="animate-spin" xmlns="http://www.w3.org/2000/svg"
+                            width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="2" x2="12" y2="6" />
+                            <line x1="12" y1="18" x2="12" y2="22" />
+                            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+                            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+                            <line x1="2" y1="12" x2="6" y2="12" />
+                            <line x1="18" y1="12" x2="22" y2="12" />
+                            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+                            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+                        </svg>
+                        <span wire:loading.remove wire:target="exportWord">Word</span>
+                        <span wire:loading wire:target="exportWord">Exporting...</span>
+                    </button>
+                    <button @click="isEditing = true"
+                        class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                        Edit
+                    </button>
+                </div>
+
+                <div x-show="!isEditing" class="flex flex-wrap gap-3 w-full">
+                    @if($reviewCount < 5)
+                        <button @click="reviewOpen = true"
                             class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                                 stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                             </svg>
-                            Edit
+                            Review ({{ 5 - $reviewCount }})
                         </button>
-                    </div>
+                    @endif
 
-                    <div class="flex flex-wrap gap-3 w-full">
-                        @if($reviewCount < 5)
-                            <button @click="reviewOpen = true"
-                                class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                    stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                </svg>
-                                Review ({{ 5 - $reviewCount }})
-                            </button>
-                        @endif
-
-                        <button @click="proReviewOpen = true"
-                            class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                                <circle cx="9" cy="7" r="4" />
-                                <path d="m16 11 2 2 4-4" />
-                            </svg>
-                            Professional Review ($5)
-                        </button>
-                    </div>
-                @endif
+                    <button @click="proReviewOpen = true"
+                        class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="m16 11 2 2 4-4" />
+                        </svg>
+                        Professional Review ($5)
+                    </button>
+                </div>
             @else
                 <button wire:click="handlePayment('paypal')"
                     class="bg-primary text-primary-foreground font-black px-6 py-3.5 rounded-xl text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 whitespace-nowrap hover:scale-[1.02] shadow-xl shadow-primary/20 transition-all">
@@ -575,6 +601,9 @@ new #[Layout('layouts.safety')] class extends Component {
 
     <!-- Document Rendering Container -->
     <div class="relative">
+        <div wire:loading wire:target="toggleEdit,cancelEdit,save" class="fixed inset-0 bg-white/60 z-[100] flex items-center justify-center print:hidden">
+            <svg class="animate-spin text-primary" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+        </div>
         @if(!$paid)
             <div
                 class="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none overflow-hidden print:hidden">
@@ -623,17 +652,15 @@ new #[Layout('layouts.safety')] class extends Component {
                     @if($logoSrc)
                         <img src="{{ $logoSrc }}" alt="Company Logo" class="max-h-32 mx-auto object-contain" />
                     @endif
-                    @if($isEditing)
-                        <div class="mt-2 print:hidden">
-                            <label class="cursor-pointer inline-flex items-center gap-2 text-xs font-bold text-primary border border-primary rounded-lg px-3 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-                                {{ $logoSrc ? 'Change Logo' : 'Upload Logo' }}
-                                <input type="file" wire:model="newLogo" accept="image/*" class="hidden">
-                            </label>
-                            <div wire:loading wire:target="newLogo" class="text-xs text-gray-500 mt-1">Uploading...</div>
-                            @error('newLogo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-                        </div>
-                    @endif
+                    <div x-show="isEditing" class="mt-2 print:hidden" style="display:none;">
+                        <label class="cursor-pointer inline-flex items-center gap-2 text-xs font-bold text-primary border border-primary rounded-lg px-3 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                            {{ $logoSrc ? 'Change Logo' : 'Upload Logo' }}
+                            <input type="file" wire:model="newLogo" accept="image/*" class="hidden">
+                        </label>
+                        <div wire:loading wire:target="newLogo" class="text-xs text-gray-500 mt-1">Uploading...</div>
+                        @error('newLogo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                    </div>
                 </div>
 
                 {{-- Title Section --}}
@@ -645,13 +672,8 @@ new #[Layout('layouts.safety')] class extends Component {
                 <div class="grid grid-cols-3 border border-black mb-6">
                     <div class="col-span-2 border-r border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Activity/Task:</span>
-                        @if($isEditing)
-                            <input type="text" wire:model="projectName"
-                                class="w-full border-0 p-0 focus:ring-0 text-[14px]">
-                        @else
-                            <span
-                                class="text-[14px] break-all overflow-wrap-anywhere">{{ Str::limit($projectName, 100) }}</span>
-                        @endif
+                        <input x-show="isEditing" type="text" wire:model="projectName" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
+                        <span x-show="!isEditing" class="text-[14px] break-all overflow-wrap-anywhere">{{ Str::limit($projectName, 100) }}</span>
                     </div>
                     <div class="border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Date:</span>
@@ -659,58 +681,38 @@ new #[Layout('layouts.safety')] class extends Component {
                     </div>
                     <div class="border-r border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Developed by:</span>
-                        @if($isEditing)
-                            <input type="text" wire:model="preparedBy" class="w-full border-0 p-0 focus:ring-0 text-[14px]">
-                        @else
-                            <span
-                                class="text-[14px] break-all overflow-wrap-anywhere">{{ Str::limit($preparedBy, 100) }}</span>
-                        @endif
+                        <input x-show="isEditing" type="text" wire:model="preparedBy" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
+                        <span x-show="!isEditing" class="text-[14px] break-all overflow-wrap-anywhere">{{ Str::limit($preparedBy, 100) }}</span>
                     </div>
                     <div class="border-r border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Competent Person:</span>
-                        @if($isEditing)
-                            <input type="text" wire:model="competentPerson"
-                                class="w-full border-0 p-0 focus:ring-0 text-[14px]">
-                        @else
-                            <span class="text-[14px]">{{ Str::limit($competentPerson ?? 'N/A', 100) }}</span>
-                        @endif
+                        <input x-show="isEditing" type="text" wire:model="competentPerson" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
+                        <span x-show="!isEditing" class="text-[14px]">{{ Str::limit($competentPerson ?? 'N/A', 100) }}</span>
                     </div>
                     <div class="border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Company:</span>
-                        @if($isEditing)
-                            <input type="text" wire:model="companyName"
-                                class="w-full border-0 p-0 focus:ring-0 text-[14px]">
-                        @else
-                            <span class="text-[14px]">{{ Str::limit($companyName, 100) }}</span>
-                        @endif
+                        <input x-show="isEditing" type="text" wire:model="companyName" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
+                        <span x-show="!isEditing" class="text-[14px]">{{ Str::limit($companyName, 100) }}</span>
                     </div>
                     <div class="border-r border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Location:</span>
-                        @if($isEditing)
-                            <input type="text" wire:model="projectLocation"
-                                class="w-full border-0 p-0 focus:ring-0 text-[14px]">
-                        @else
-                            <span class="text-[14px]">{{ Str::limit($projectLocation, 100) }}</span>
-                        @endif
+                        <input x-show="isEditing" type="text" wire:model="projectLocation" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
+                        <span x-show="!isEditing" class="text-[14px]">{{ Str::limit($projectLocation, 100) }}</span>
                     </div>
                     <div class="col-span-2 border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Required Equipment:</span>
-                        @if($isEditing)
-                            <textarea wire:model="equipmentTools"
-                                class="w-full border-0 p-0 focus:ring-0 text-[14px] resize-none" rows="3"></textarea>
-                        @else
-                            <div class="text-[14px] line-clamp-3" title="{{ $equipmentTools }}">
-                                {{ Str::limit($equipmentTools, 319) }}
-                            </div>
-                        @endif
+                        <textarea x-show="isEditing" wire:model="equipmentTools" class="w-full border-0 p-0 focus:ring-0 text-[14px] resize-none" rows="3" style="display:none;"></textarea>
+                        <div x-show="!isEditing" class="text-[14px] line-clamp-3" title="{{ $equipmentTools }}">
+                            {{ Str::limit($equipmentTools, 319) }}
+                        </div>
                     </div>
                     <div class="col-span-3 p-2">
                         <span class="text-[12px] font-bold block uppercase mb-1">Required Documentation:</span>
                         <div class="flex items-center gap-6">
                             @foreach(['hot_work_permit' => 'Hot Work Permit', 'confined_space_permit' => 'Confined Space Permit', 'mewp_permit' => 'MEWP Permit'] as $docKey => $docLabel)
-                                <div class="flex items-center gap-2 {{ $isEditing ? 'cursor-pointer select-none' : '' }}"
-                                    @if($isEditing) wire:click="toggleDoc('{{ $docKey }}')" @endif>
-                                    <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none {{ $isEditing ? 'hover:bg-blue-50' : '' }}">{!! ($docs[$docKey] ?? false) ? '&#10003;' : '' !!}</span>
+                                <div class="flex items-center gap-2" :class="isEditing ? 'cursor-pointer select-none' : ''"
+                                    x-on:click="isEditing && $wire.toggleDoc('{{ $docKey }}')">
+                                    <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none" :class="isEditing ? 'hover:bg-blue-50' : ''">{!! ($docs[$docKey] ?? false) ? '&#10003;' : '' !!}</span>
                                     <span class="text-[12px]">{{ $docLabel }}</span>
                                 </div>
                             @endforeach
@@ -742,16 +744,16 @@ new #[Layout('layouts.safety')] class extends Component {
                             ];
                         @endphp
                         @foreach($ppeItems as $key => $label)
-                            <div class="flex items-center gap-2 {{ $isEditing ? 'cursor-pointer select-none' : '' }}"
-                                @if($isEditing) wire:click="togglePpe('{{ $key }}')" @endif>
-                                <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none {{ $isEditing ? 'hover:bg-blue-50' : '' }}">{!! ($ppe[$key] ?? false) ? '&#10003;' : '' !!}</span>
+                            <div class="flex items-center gap-2" :class="isEditing ? 'cursor-pointer select-none' : ''"
+                                x-on:click="isEditing && $wire.togglePpe('{{ $key }}')">
+                                <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none" :class="isEditing ? 'hover:bg-blue-50' : ''">{!! ($ppe[$key] ?? false) ? '&#10003;' : '' !!}</span>
                                 <span class="text-[12px]">{{ $label }}</span>
                             </div>
                         @endforeach
                         @foreach($ppeOthers as $oi => $other)
-                            <div class="flex items-center gap-2 {{ $isEditing ? 'cursor-pointer select-none' : '' }}"
-                                @if($isEditing) wire:click="togglePpeOther({{ $oi }})" @endif>
-                                <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none {{ $isEditing ? 'hover:bg-blue-50' : '' }}">{!! $other['checked'] ? '&#10003;' : '' !!}</span>
+                            <div class="flex items-center gap-2" :class="isEditing ? 'cursor-pointer select-none' : ''"
+                                x-on:click="isEditing && $wire.togglePpeOther({{ $oi }})">
+                                <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none" :class="isEditing ? 'hover:bg-blue-50' : ''">{!! $other['checked'] ? '&#10003;' : '' !!}</span>
                                 <span class="text-[12px]">{{ $other['label'] }}</span>
                             </div>
                         @endforeach
