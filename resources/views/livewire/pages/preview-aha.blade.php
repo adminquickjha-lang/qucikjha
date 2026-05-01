@@ -247,7 +247,7 @@ new #[Layout('layouts.safety')] class extends Component {
 
         if ($this->reviewCount >= 5) {
             $this->dispatch('notify', ['message' => 'Review limit reached (Max 5 per document).', 'type' => 'error']);
-            $this->showReviewModal = false;
+            $this->dispatch('close-review-modal');
             return;
         }
 
@@ -314,7 +314,7 @@ new #[Layout('layouts.safety')] class extends Component {
             ]);
 
             $this->reviewRequest = '';
-            $this->showReviewModal = false;
+            $this->dispatch('close-review-modal');
             $this->dispatch('swal', ['title' => 'Document Improved!', 'text' => 'The changes have been applied to your safety document.', 'icon' => 'success']);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Review failed: ' . $e->getMessage());
@@ -343,7 +343,7 @@ new #[Layout('layouts.safety')] class extends Component {
         ]);
 
         $this->activeReviewId = $review->id;
-        $this->showProfessionalReviewModal = false;
+        $this->dispatch('close-pro-review-modal');
 
         return $this->handleProfessionalReviewPayment('paypal');
     }
@@ -438,7 +438,7 @@ new #[Layout('layouts.safety')] class extends Component {
     }
 }; ?>
 
-<div class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
+<div x-data="{ reviewOpen: false, proReviewOpen: false }" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
     <!-- Header Controls -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 print:hidden">
         <div class="flex-1 min-w-0">
@@ -463,9 +463,11 @@ new #[Layout('layouts.safety')] class extends Component {
             @if($paid)
                 @if($isEditing)
                     <div class="flex flex-wrap gap-3 w-full">
-                        <button wire:click="save" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                            Save
+                        <button wire:click="save" wire:loading.attr="disabled" wire:target="save" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-60">
+                            <svg wire:loading.remove wire:target="save" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            <svg wire:loading wire:target="save" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+                            <span wire:loading.remove wire:target="save">Save</span>
+                            <span wire:loading wire:target="save">Saving...</span>
                         </button>
                         <button wire:click="toggleEdit" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
                             Cancel
@@ -491,13 +493,13 @@ new #[Layout('layouts.safety')] class extends Component {
 
                     <div class="flex flex-wrap gap-3 w-full">
                         @if($reviewCount < 5)
-                            <button wire:click="$set('showReviewModal', true)" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                            <button @click="reviewOpen = true" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 Review ({{ 5 - $reviewCount }})
                             </button>
                         @endif
 
-                        <button wire:click="$set('showProfessionalReviewModal', true)" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
+                        <button @click="proReviewOpen = true" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></svg>
                             Professional Review ($5)
                         </button>
@@ -978,20 +980,20 @@ on AHA. </p>
 
         </div>
 
-    @if($showReviewModal)
-        <div 
-            x-data="{ show: @entangle('showReviewModal') }"
-            x-show="show"
+    <div
+            x-show="reviewOpen"
             x-transition:enter="transition ease-out duration-300"
             x-transition:enter-start="opacity-0"
             x-transition:enter-end="opacity-100"
             x-transition:leave="transition ease-in duration-200"
             x-transition:leave-start="opacity-100"
             x-transition:leave-end="opacity-0"
+            x-on:close-review-modal.window="reviewOpen = false"
             class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4"
+            style="display: none;"
         >
             <div
-                x-show="show"
+                x-show="reviewOpen"
                 x-transition:enter="transition ease-out duration-300 transform"
                 x-transition:enter-start="opacity-0 scale-95 translate-y-4"
                 x-transition:enter-end="opacity-100 scale-100 translate-y-0"
@@ -1001,7 +1003,7 @@ on AHA. </p>
                 class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative"
             >
 
-                <button @click="show = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
+                <button @click="reviewOpen = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
 
@@ -1039,23 +1041,22 @@ on AHA. </p>
                 </div>
             </div>
         </div>
-    @endif
 
     {{-- Professional Review Instructions Modal --}}
-    @if($showProfessionalReviewModal)
-        <div 
-            x-data="{ show: @entangle('showProfessionalReviewModal') }"
-            x-show="show"
+    <div
+            x-show="proReviewOpen"
             x-transition:enter="transition ease-out duration-300"
             x-transition:enter-start="opacity-0"
             x-transition:enter-end="opacity-100"
             x-transition:leave="transition ease-in duration-200"
             x-transition:leave-start="opacity-100"
             x-transition:leave-end="opacity-0"
+            x-on:close-pro-review-modal.window="proReviewOpen = false"
             class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4"
+            style="display: none;"
         >
-            <div 
-                x-show="show"
+            <div
+                x-show="proReviewOpen"
                 x-transition:enter="transition ease-out duration-300 transform"
                 x-transition:enter-start="opacity-0 scale-95 translate-y-4"
                 x-transition:enter-end="opacity-100 scale-100 translate-y-0"
@@ -1064,7 +1065,7 @@ on AHA. </p>
                 x-transition:leave-end="opacity-0 scale-95 translate-y-4"
                 class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative"
             >
-                <button @click="show = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
+                <button @click="proReviewOpen = false" class="absolute top-6 right-6 text-slate-400 hover:text-slate-900 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </button>
 
@@ -1079,22 +1080,24 @@ on AHA. </p>
                 <div class="space-y-6">
                     <div>
                         <label class="block text-[10px] font-black uppercase tracking-widest text-black-400 mb-2">Instructions</label>
-                        <textarea wire:model="professionalReviewMessage" 
+                        <textarea wire:model="professionalReviewMessage"
                             class="w-full rounded-2xl bg-slate-50 border-0 ring-1 ring-slate-200 focus:ring-2 focus:ring-indigo-500 p-4 min-h-[150px] font-medium text-slate-900 placeholder:text-slate-300 transition-all"
                             placeholder="e.g., 'Ensure all roof safety protocols are covered...'"></textarea>
                     </div>
 
-                    <button wire:click="startProfessionalReview" 
-                        class="w-full bg-primary text-primary-foreground font-black py-4 rounded-2xl uppercase tracking-widest text-sm hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-primary/20 group">
-                        <span class="flex items-center justify-center gap-2">
+                    <button wire:click="startProfessionalReview" wire:loading.attr="disabled" wire:target="startProfessionalReview"
+                        class="w-full bg-primary text-primary-foreground font-black py-4 rounded-2xl uppercase tracking-widest text-sm hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-primary/20 disabled:opacity-60 group">
+                        <span wire:loading.remove wire:target="startProfessionalReview" class="flex items-center justify-center gap-2">
                             Request Expert Review ($5)
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                        </span>
+                        <span wire:loading wire:target="startProfessionalReview" class="flex items-center justify-center">
+                            <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
                         </span>
                     </button>
                 </div>
             </div>
         </div>
-    @endif
 
     <!-- Review Processing Overlay -->
     <div wire:loading wire:target="review"
