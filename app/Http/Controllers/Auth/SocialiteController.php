@@ -33,11 +33,17 @@ class SocialiteController extends Controller
         ]);
 
         // If the user doesn't have a role, default to user
-        if (! $user->role) {
+        if (!$user->role) {
             $user->update(['role' => 'user']);
         }
 
         Auth::login($user);
+
+        session()->flash('swal', [
+            'title' => 'Welcome, ' . $user->name . '!',
+            'text' => 'You have successfully signed in with Google.',
+            'icon' => 'success',
+        ]);
 
         return redirect()->intended(route('user-dashboard', absolute: false));
     }

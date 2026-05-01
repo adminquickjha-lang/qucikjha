@@ -109,5 +109,20 @@
             });
         });
     </script>
+
+    @if(session('swal'))
+        <script>
+            @php $swal = session('swal'); @endphp
+            document.addEventListener('DOMContentLoaded', function () {
+                Swal.fire({
+                    title: "{{ $swal['title'] ?? 'Notification' }}",
+                    text: "{{ $swal['text'] ?? '' }}",
+                    icon: "{{ $swal['icon'] ?? 'info' }}",
+                    confirmButtonColor: '#0f172a',
+                    borderRadius: '1.5rem'
+                });
+            });
+        </script>
+    @endif
 </body>
 </html>

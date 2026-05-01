@@ -84,20 +84,33 @@
         });
     </script>
 
-    @if(session('success') || session('error'))
+    @if(session('success') || session('error') || session('swal'))
         <script>
-            function fireSessionToast() {
-                Toast.fire({
-                    title: '{{ session("success") ? "Success!" : "Error!" }}',
-                    text: "{{ session('success') ?? session('error') }}",
-                    icon: '{{ session("success") ? "success" : "error" }}'
-                });
+            function fireSessionAlerts() {
+                @if(session('swal'))
+                    @php $swal = session('swal'); @endphp
+                    Swal.fire({
+                        title: "{{ $swal['title'] ?? 'Notification' }}",
+                        text: "{{ $swal['text'] ?? '' }}",
+                        icon: "{{ $swal['icon'] ?? 'info' }}",
+                        confirmButtonColor: '#0f172a',
+                        borderRadius: '1.5rem'
+                    });
+                @endif
+
+                @if(session('success') || session('error'))
+                    Toast.fire({
+                        title: '{{ session("success") ? "Success!" : "Error!" }}',
+                        text: "{{ session('success') ?? session('error') }}",
+                        icon: '{{ session("success") ? "success" : "error" }}'
+                    });
+                @endif
             }
 
             if (window.Livewire) {
-                document.addEventListener('livewire:navigated', fireSessionToast, { once: true });
+                document.addEventListener('livewire:navigated', fireSessionAlerts, { once: true });
             } else {
-                fireSessionToast();
+                fireSessionAlerts();
             }
         </script>
     @endif
