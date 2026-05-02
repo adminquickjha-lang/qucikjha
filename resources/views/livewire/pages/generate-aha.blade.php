@@ -189,7 +189,7 @@ new #[Layout('layouts.safety')] class extends Component {
             }
 
             $content = $aiResponse->text;
-            \Illuminate\Support\Facades\Log::info('AHA AI Raw Response:', ['content' => $content]);
+            \Illuminate\Support\Facades\Log::info('AHA  Raw Response:', ['content' => $content]);
 
             if (preg_match('/```json\s*(.*?)\s*```/s', $content, $matches)) {
                 $content = $matches[1];

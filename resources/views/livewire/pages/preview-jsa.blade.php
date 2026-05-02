@@ -1,46 +1,77 @@
 <?php
 
+use App\Ai\Agents\ReviewAgent;
+use App\Mail\ProfessionalReviewRequestMail;
+use App\Models\DocumentReview;
+use App\Models\ProfessionalReview;
+use App\Models\SafetyDocument;
+use App\Models\Setting;
+use App\Models\User;
+use App\Services\AdobePdfService;
+use App\Services\AiPricingService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
 use Livewire\WithFileUploads;
-use App\Models\Setting;
 
-new #[Layout('layouts.safety')] class extends Component {
+new #[Layout('layouts.safety')] class extends Component
+{
     use WithFileUploads;
 
     public $id;
+
     public $paid = false;
+
     public $project;
 
     public $newLogo;
 
     public $isEditing = false;
+
     public $projectName;
+
     public $projectLocation;
+
     public $preparedBy;
+
     public $companyName;
+
     public $competentPerson;
+
     public $equipmentTools;
+
     public $steps = [];
+
     public $docs = [];
+
     public $ppe = [];
+
     public $ppeOthers = [];
 
     // Review Feature
     public $showReviewModal = false;
+
     public $reviewRequest = '';
+
     public $isReviewing = false;
+
     public $reviewCount = 0;
 
     // Professional Review Feature
     public $showProfessionalReviewModal = false;
+
     public $professionalReviewMessage = '';
+
     public $activeReviewId;
 
     public function mount($id)
     {
         $this->id = $id;
-        $this->project = \App\Models\SafetyDocument::findOrFail($id);
+        $this->project = SafetyDocument::findOrFail($id);
 
         abort_unless(
             auth()->id() === $this->project->user_id || auth()->user()?->role === 'admin',
@@ -89,25 +120,23 @@ new #[Layout('layouts.safety')] class extends Component {
         $this->reviewCount = $this->project->ai_response['review_count'] ?? 0;
     }
 
-    public function jhaHazards()
-    {
-        return $this->steps;
-    }
 
     public function toggleEdit()
     {
-        if (!$this->paid)
+        if (! $this->paid) {
             return;
-        $this->isEditing = !$this->isEditing;
-        if (!$this->isEditing) {
+        }
+        $this->isEditing = ! $this->isEditing;
+        if (! $this->isEditing) {
             $this->dispatch('edit-closed');
         }
     }
 
     public function cancelEdit(): void
     {
-        if (!$this->paid)
+        if (! $this->paid) {
             return;
+        }
         $project = $this->project;
         $this->projectName = $project->project_name;
         $this->projectLocation = $project->project_location;
@@ -140,40 +169,79 @@ new #[Layout('layouts.safety')] class extends Component {
             $project->ai_response['jsa_specifics']['ppe_others'] ?? []
         );
         $this->isEditing = false;
-        $this->dispatch('edit-closed');
+        $this->dispatch('edit-closed', [
+            'projectName' => $this->projectName,
+            'projectLocation' => $this->projectLocation,
+            'companyName' => $this->companyName,
+            'preparedBy' => $this->preparedBy,
+            'competentPerson' => $this->competentPerson,
+            'equipmentTools' => $this->equipmentTools,
+            'steps' => $this->steps,
+            'docs' => $this->docs,
+            'ppe' => $this->ppe,
+            'ppeOthers' => $this->ppeOthers,
+        ]);
     }
 
     public function save()
     {
-        if (!$this->paid)
+        Log::info('JSA Save initiated', ['id' => $this->id]);
+        if (! $this->paid) {
             return;
+        }
 
-        $aiResponse = $this->project->ai_response;
-        $aiResponse['steps'] = $this->steps;
-        $aiResponse['jsa_specifics']['documentation'] = $this->docs;
-        $aiResponse['jsa_specifics']['ppe_checklist'] = $this->ppe;
-        $aiResponse['jsa_specifics']['ppe_others'] = array_values(
-            array_map(fn ($o) => $o['label'], array_filter($this->ppeOthers, fn ($o) => $o['checked']))
-        );
+        try {
+            $aiResponse = $this->project->ai_response ?? [];
+            if (! isset($aiResponse['jsa_specifics'])) {
+                $aiResponse['jsa_specifics'] = [];
+            }
 
-        $this->project->update([
-            'project_name' => $this->projectName,
-            'project_location' => $this->projectLocation,
-            'company_name' => $this->companyName,
-            'prepared_by' => $this->preparedBy,
-            'competent_person' => $this->competentPerson,
-            'equipment_tools' => $this->equipmentTools,
-            'ai_response' => $aiResponse,
-        ]);
+            $aiResponse['steps'] = $this->steps;
+            $aiResponse['jsa_specifics']['documentation'] = $this->docs;
+            $aiResponse['jsa_specifics']['ppe_checklist'] = $this->ppe;
 
-        $this->isEditing = false;
-        $this->dispatch('edit-closed');
-        $this->dispatch('swal', ['title' => 'Success!', 'text' => 'Document updated successfully!', 'icon' => 'success']);
+            if (is_array($this->ppeOthers)) {
+                $aiResponse['jsa_specifics']['ppe_others'] = array_values(
+                    array_map(fn ($o) => $o['label'] ?? $o, array_filter($this->ppeOthers, fn ($o) => ! empty($o['checked']) || (is_string($o) && ! empty($o))))
+                );
+            }
+
+            $this->project->update([
+                'project_name' => $this->projectName,
+                'project_location' => $this->projectLocation,
+                'company_name' => $this->companyName,
+                'prepared_by' => $this->preparedBy,
+                'competent_person' => $this->competentPerson,
+                'equipment_tools' => $this->equipmentTools,
+                'ai_response' => $aiResponse,
+            ]);
+
+            $this->isEditing = false;
+            $this->dispatch('edit-closed', [
+                'projectName' => $this->projectName,
+                'projectLocation' => $this->projectLocation,
+                'companyName' => $this->companyName,
+                'preparedBy' => $this->preparedBy,
+                'competentPerson' => $this->competentPerson,
+                'equipmentTools' => $this->equipmentTools,
+                'steps' => $this->steps,
+                'docs' => $this->docs,
+                'ppe' => $this->ppe,
+                'ppeOthers' => $this->ppeOthers,
+            ]);
+            $this->dispatch('swal', ['title' => 'Success!', 'text' => 'Document updated successfully!', 'icon' => 'success']);
+        } catch (\Exception $e) {
+            Log::error('JSA Save failed: '.$e->getMessage(), [
+                'id' => $this->id,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            $this->dispatch('swal', ['title' => 'Error!', 'text' => 'Failed to save document. Please check logs.', 'icon' => 'error']);
+        }
     }
 
     public function deleteStep(int $index): void
     {
-        if (!$this->paid) {
+        if (! $this->paid) {
             return;
         }
         array_splice($this->steps, $index, 1);
@@ -182,7 +250,7 @@ new #[Layout('layouts.safety')] class extends Component {
 
     public function addStep(): void
     {
-        if (!$this->paid) {
+        if (! $this->paid) {
             return;
         }
         $this->steps[] = [
@@ -195,10 +263,10 @@ new #[Layout('layouts.safety')] class extends Component {
 
     public function addStepItem(int $stepIndex, string $field): void
     {
-        if (!$this->paid) {
+        if (! $this->paid) {
             return;
         }
-        if (!is_array($this->steps[$stepIndex][$field] ?? null)) {
+        if (! is_array($this->steps[$stepIndex][$field] ?? null)) {
             $this->steps[$stepIndex][$field] = [$this->steps[$stepIndex][$field] ?? ''];
         }
         $this->steps[$stepIndex][$field][] = '';
@@ -206,7 +274,7 @@ new #[Layout('layouts.safety')] class extends Component {
 
     public function deleteStepItem(int $stepIndex, string $field, int $itemIndex): void
     {
-        if (!$this->paid) {
+        if (! $this->paid) {
             return;
         }
         array_splice($this->steps[$stepIndex][$field], $itemIndex, 1);
@@ -215,39 +283,58 @@ new #[Layout('layouts.safety')] class extends Component {
 
     public function togglePpe(string $key): void
     {
-        if (!$this->paid) {
+        if (! $this->paid) {
             return;
         }
-        $this->ppe[$key] = !($this->ppe[$key] ?? false);
+        $this->ppe[$key] = ! ($this->ppe[$key] ?? false);
     }
 
     public function toggleDoc(string $key): void
     {
-        if (!$this->paid) {
+        if (! $this->paid) {
             return;
         }
-        $this->docs[$key] = !($this->docs[$key] ?? false);
+        $this->docs[$key] = ! ($this->docs[$key] ?? false);
     }
 
     public function togglePpeOther(int $index): void
     {
-        if (!$this->paid) {
+        if (! $this->paid) {
             return;
         }
-        $this->ppeOthers[$index]['checked'] = !($this->ppeOthers[$index]['checked'] ?? true);
+        $this->ppeOthers[$index]['checked'] = ! ($this->ppeOthers[$index]['checked'] ?? true);
     }
 
     public function updatedNewLogo(): void
     {
-        $this->validate(['newLogo' => 'image|max:3072']);
+        Log::info('JSA: updatedNewLogo triggered', ['has_file' => ! empty($this->newLogo)]);
+        try {
+            $this->validate(['newLogo' => 'image|max:3072']);
+            Log::info('JSA: Logo validation passed');
 
-        if ($this->project->logo_path) {
-            \Storage::disk('public')->delete($this->project->logo_path);
+            if ($this->project->logo_path && Storage::disk('public')->exists($this->project->logo_path)) {
+                Log::info('JSA: Deleting old logo', ['path' => $this->project->logo_path]);
+                Storage::disk('public')->delete($this->project->logo_path);
+            }
+
+            $path = $this->newLogo->store('logos', 'public');
+            Log::info('JSA: New logo stored', ['path' => $path]);
+            
+            $this->project->update(['logo_path' => $path]);
+            $this->project->refresh();
+            
+            $this->newLogo = null;
+            $this->isEditing = true;
+            
+            Log::info('JSA: Logo update complete, isEditing set to true');
+            $this->dispatch('swal', ['title' => 'Success!', 'text' => 'Logo updated successfully!', 'icon' => 'success']);
+        } catch (\Exception $e) {
+            Log::error('JSA: Logo upload failed', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            $this->dispatch('swal', ['title' => 'Error!', 'text' => 'Logo upload failed: '.$e->getMessage(), 'icon' => 'error']);
         }
-
-        $path = $this->newLogo->store('logos', 'public');
-        $this->project->update(['logo_path' => $path]);
-        $this->newLogo = null;
     }
 
     public function handlePayment($method = null)
@@ -272,23 +359,25 @@ new #[Layout('layouts.safety')] class extends Component {
     public function review()
     {
         set_time_limit(300);
-        if (!$this->paid)
+        if (! $this->paid) {
             return;
+        }
 
         if ($this->reviewCount >= 5) {
             $this->dispatch('notify', ['message' => 'Review limit reached (Max 5 per document).', 'type' => 'error']);
             $this->dispatch('close-review-modal');
+
             return;
         }
 
         $this->validate([
-            'reviewRequest' => 'required|string|min:10|max:1000'
+            'reviewRequest' => 'required|string|min:10|max:1000',
         ]);
 
         try {
             $this->isReviewing = true;
 
-            $agent = new \App\Ai\Agents\ReviewAgent($this->project);
+            $agent = new ReviewAgent($this->project);
             $aiResponse = $agent->prompt($this->reviewRequest);
             $content = $aiResponse->text;
 
@@ -301,30 +390,30 @@ new #[Layout('layouts.safety')] class extends Component {
 
             $newData = json_decode(trim($content), true);
 
-            if (!$newData) {
-                \Illuminate\Support\Facades\Log::error('Invalid JSON', [
+            if (! $newData) {
+                Log::error('Invalid JSON', [
                     'document_id' => $this->id,
-                    'raw_response' => $aiResponse->text
+                    'raw_response' => $aiResponse->text,
                 ]);
-                throw new \Exception("Please try again with a more specific request.");
+                throw new \Exception('Please try again with a more specific request.');
             }
 
             // Support multiple possible keys for steps
             $stepsKey = isset($newData['steps']) ? 'steps' : (isset($newData['jsa_steps']) ? 'jsa_steps' : (isset($newData['safety_steps']) ? 'safety_steps' : null));
 
-            if (!$stepsKey) {
-                \Illuminate\Support\Facades\Log::error('Missing steps key', [
+            if (! $stepsKey) {
+                Log::error('Missing steps key', [
                     'document_id' => $this->id,
-                    'json_keys' => array_keys($newData)
+                    'json_keys' => array_keys($newData),
                 ]);
-                throw new \Exception("Please try being more specific.");
+                throw new \Exception('Please try being more specific.');
             }
 
             // Increment review count and update project
             $newData['review_count'] = $this->reviewCount + 1;
 
             $this->project->update([
-                'ai_response' => $newData
+                'ai_response' => $newData,
             ]);
 
             // Re-mount to refresh everything
@@ -333,9 +422,9 @@ new #[Layout('layouts.safety')] class extends Component {
             // Save review history
             $inputTokens = ($aiResponse->usage->promptTokens ?? 0) + ($aiResponse->usage->cacheReadInputTokens ?? 0);
             $outputTokens = ($aiResponse->usage->completionTokens ?? 0) + ($aiResponse->usage->reasoningTokens ?? 0);
-            $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
+            $cost = AiPricingService::calculateCost($inputTokens, $outputTokens);
 
-            \App\Models\DocumentReview::create([
+            DocumentReview::create([
                 'safety_document_id' => $this->id,
                 'prompt' => $this->reviewRequest,
                 'input_tokens' => $inputTokens,
@@ -347,7 +436,7 @@ new #[Layout('layouts.safety')] class extends Component {
             $this->dispatch('close-review-modal');
             $this->dispatch('swal', ['title' => 'Document Improved!', 'text' => 'The changes have been applied to your safety document.', 'icon' => 'success']);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Review failed: ' . $e->getMessage());
+            Log::error('Review failed: '.$e->getMessage());
             $knownMessages = ['Please try again with a more specific request.', 'Please try being more specific.'];
             $text = in_array($e->getMessage(), $knownMessages) ? $e->getMessage() : 'Something went wrong. Please try again in a moment.';
             $this->dispatch('swal', ['title' => 'Review failed!', 'text' => $text, 'icon' => 'error']);
@@ -360,14 +449,15 @@ new #[Layout('layouts.safety')] class extends Component {
     {
         if (empty(trim($this->professionalReviewMessage))) {
             $this->dispatch('swal', ['title' => 'Instructions Required', 'text' => 'Please enter some instructions for our professional team.', 'icon' => 'warning']);
+
             return;
         }
 
-        $review = \App\Models\ProfessionalReview::create([
+        $review = ProfessionalReview::create([
             'user_id' => auth()->id(),
             'safety_document_id' => $this->id,
             'message' => $this->professionalReviewMessage,
-            'token' => \Illuminate\Support\Str::random(60),
+            'token' => Str::random(60),
             'progress' => 1,
             'is_paid' => false,
         ]);
@@ -388,15 +478,15 @@ new #[Layout('layouts.safety')] class extends Component {
         }
 
         // Fake Payment Flow
-        $review = \App\Models\ProfessionalReview::findOrFail($this->activeReviewId);
+        $review = ProfessionalReview::findOrFail($this->activeReviewId);
         $review->update(['is_paid' => true]);
 
         // Notify Admin
-        $adminEmail = \App\Models\User::where('role', 'admin')->first()?->email ?? 'admin@example.com';
+        $adminEmail = User::where('role', 'admin')->first()?->email ?? 'admin@example.com';
         try {
-            \Illuminate\Support\Facades\Mail::to($adminEmail)->send(new \App\Mail\ProfessionalReviewRequestMail($review));
+            Mail::to($adminEmail)->send(new ProfessionalReviewRequestMail($review));
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Mail failed: ' . $e->getMessage());
+            Log::error('Mail failed: '.$e->getMessage());
         }
 
         $this->showProfessionalReviewPaymentModal = false;
@@ -407,19 +497,20 @@ new #[Layout('layouts.safety')] class extends Component {
     {
         $type = strtolower($this->project->document_type);
         $settingKey = "{$type}_price";
+
         return Setting::where('key', $settingKey)->value('value') ?? '19.90';
     }
 
-    public function exportWord(\App\Services\AdobePdfService $adobeService)
+    public function exportWord(AdobePdfService $adobeService)
     {
-        if (!$this->paid && auth()->id() !== $this->project->user_id) {
+        if (! $this->paid && auth()->id() !== $this->project->user_id) {
             return;
         }
 
         $document = $this->project;
 
         // 1. Load admin-controlled template settings
-        $settings = \App\Models\Setting::whereIn('key', [
+        $settings = Setting::whereIn('key', [
             'header_color',
             'table_header_color',
             'rac_e_color',
@@ -431,12 +522,12 @@ new #[Layout('layouts.safety')] class extends Component {
         ])->pluck('value', 'key')->toArray();
 
         // 2. Generate PDF first (Temp file)
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.safety-document-jsa', compact('document', 'settings'))
+        $pdf = Pdf::loadView('pdf.safety-document-jsa', compact('document', 'settings'))
             ->setPaper('a4', 'landscape')
             ->setOptions(['isPhpEnabled' => true]);
 
-        $pdfFileName = 'temp_' . $document->id . '.pdf';
-        $pdfPath = storage_path('app/public/' . $pdfFileName);
+        $pdfFileName = 'temp_'.$document->id.'.pdf';
+        $pdfPath = storage_path('app/public/'.$pdfFileName);
         $pdf->save($pdfPath);
 
         try {
@@ -449,8 +540,9 @@ new #[Layout('layouts.safety')] class extends Component {
             $wordFileName = "{$document->document_type}_{$cleanName}_{$document->id}.docx";
 
             // Cleanup temp PDF
-            if (file_exists($pdfPath))
+            if (file_exists($pdfPath)) {
                 unlink($pdfPath);
+            }
 
             return response()->streamDownload(function () use ($wordContent) {
                 echo $wordContent;
@@ -458,22 +550,32 @@ new #[Layout('layouts.safety')] class extends Component {
 
         } catch (\Exception $e) {
             // Cleanup on failure
-            if (file_exists($pdfPath))
+            if (file_exists($pdfPath)) {
                 unlink($pdfPath);
+            }
 
-            \Illuminate\Support\Facades\Log::error('Adobe Conversion Failed: ' . $e->getMessage());
+            Log::error('Adobe Conversion Failed: '.$e->getMessage());
             $this->dispatch('notify', ['message' => 'Word conversion failed. Please try again.', 'type' => 'error']);
+
             return;
         }
     }
 }; ?>
 
+<div x-data="jsaPageData()" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
 <script>
 function jsaPageData() {
     return {
         reviewOpen: false,
         proReviewOpen: false,
-        isEditing: false,
+        isEditing: @js($isEditing),
+        isSaving: false,
+        projectName: @js($projectName),
+        projectLocation: @js($projectLocation),
+        preparedBy: @js($preparedBy),
+        companyName: @js($companyName),
+        competentPerson: @js($competentPerson),
+        equipmentTools: @js($equipmentTools),
         steps: @js(array_values($steps)),
         docs: @js($docs),
         ppe: @js($ppe),
@@ -483,13 +585,16 @@ function jsaPageData() {
                 step_description: '',
                 hazards: [''],
                 controls: [''],
-                responsibilities: ['Site Supervisor']
+                responsibilities: [''],
             });
         },
         deleteStep(idx) { this.steps.splice(idx, 1); },
         addStepItem(si, field) {
-            if (!Array.isArray(this.steps[si][field])) {
-                let currentVal = this.steps[si][field] || '';
+            if (!this.steps[si][field]) {
+                this.steps[si][field] = [];
+            }
+            const currentVal = this.steps[si][field];
+            if (!Array.isArray(currentVal)) {
                 this.steps[si][field] = [currentVal];
             }
             this.steps[si][field].push('');
@@ -499,18 +604,48 @@ function jsaPageData() {
         togglePpe(key) { this.ppe[key] = !this.ppe[key]; },
         togglePpeOther(idx) { this.ppeOthers[idx].checked = !this.ppeOthers[idx].checked; },
         async saveDoc() {
-            this.$wire.$set('steps', this.steps, true);
-            this.$wire.$set('docs', this.docs, true);
-            this.$wire.$set('ppe', this.ppe, true);
-            this.$wire.$set('ppeOthers', this.ppeOthers, true);
-            await this.$wire.save();
+            this.isSaving = true;
+            console.log('JSA: Saving document state...');
+            try {
+                this.$wire.$set('projectName', this.projectName, true);
+                this.$wire.$set('projectLocation', this.projectLocation, true);
+                this.$wire.$set('preparedBy', this.preparedBy, true);
+                this.$wire.$set('companyName', this.companyName, true);
+                this.$wire.$set('competentPerson', this.competentPerson, true);
+                this.$wire.$set('equipmentTools', this.equipmentTools, true);
+                this.$wire.$set('steps', this.steps, true);
+                this.$wire.$set('docs', this.docs, true);
+                this.$wire.$set('ppe', this.ppe, true);
+                this.$wire.$set('ppeOthers', this.ppeOthers, true);
+                
+                console.log('JSA: Calling $wire.save()...');
+                await this.$wire.save();
+                console.log('JSA: Save call completed.');
+                this.isEditing = false;
+            } catch (err) {
+                console.error('JSA: Save error:', err);
+                this.$dispatch('swal', { title: 'Error!', text: 'Failed to communicate with server: ' + err.message, icon: 'error' });
+            } finally {
+                this.isSaving = false;
+            }
         },
         init() {
-            this.$wire.on('edit-closed', ({ steps, docs, ppe, ppeOthers }) => {
-                if (steps) this.steps = steps;
-                if (docs) this.docs = docs;
-                if (ppe) this.ppe = ppe;
-                if (ppeOthers) this.ppeOthers = ppeOthers;
+            window.addEventListener('is-saving-false', () => {
+                this.isSaving = false;
+            });
+            
+            this.$wire.on('edit-closed', (data) => {
+                console.log('JSA: Received edit-closed event', data);
+                if (data && typeof data === 'object') {
+                    [
+                        'projectName', 'projectLocation', 'preparedBy', 'companyName',
+                        'competentPerson', 'equipmentTools', 'steps', 'docs', 'ppe', 'ppeOthers'
+                    ].forEach(field => {
+                        if (data[field] !== undefined) {
+                            this[field] = data[field];
+                        }
+                    });
+                }
                 this.isEditing = false;
             });
         }
@@ -518,7 +653,6 @@ function jsaPageData() {
 }
 </script>
 
-<div x-data="jsaPageData()" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
     <!-- Header Controls -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 print:hidden">
         <div class="flex-1 min-w-0">
@@ -553,18 +687,17 @@ function jsaPageData() {
 
         <div class="flex flex-col gap-3 w-full sm:w-fit">
             @if($paid)
-                <div x-show="isEditing" class="flex flex-wrap gap-3 w-full" style="display:none;">
-                    <button @click="saveDoc()" wire:loading.attr="disabled" wire:target="save"
+                <div x-show="isEditing" class="flex flex-wrap gap-3 w-full">
+                    <button @click="console.log('Save button clicked'); saveDoc()" :disabled="isSaving"
                         class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-60">
-                        <svg wire:loading.remove wire:target="save" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        <svg x-show="!isSaving" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
                             <polyline points="17 21 17 13 7 13 7 21" />
                             <polyline points="7 3 7 8 15 8" />
                         </svg>
-                        <svg wire:loading wire:target="save" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
-                        <span wire:loading.remove wire:target="save">Save</span>
-                        <span wire:loading wire:target="save">Saving...</span>
+                        <span x-show="!isSaving">Save</span>
+                        <span x-show="isSaving">Saving...</span>
                     </button>
                     <button @click="isEditing = false; $wire.cancelEdit()"
                         class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
@@ -609,7 +742,7 @@ function jsaPageData() {
                         <span wire:loading.remove wire:target="exportWord">Word</span>
                         <span wire:loading wire:target="exportWord">Exporting...</span>
                     </button>
-                    <button @click="isEditing = true"
+                    <button @click="isEditing = true; $wire.$set('isEditing', true)"
                         class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg whitespace-nowrap">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -666,9 +799,22 @@ function jsaPageData() {
 
     <!-- Document Rendering Container -->
     <div class="relative">
-        <div wire:loading wire:target="save" class="fixed inset-0 bg-white/60 z-[100] flex items-center justify-center print:hidden">
-            <svg class="animate-spin text-primary" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
+    <!-- Saving Overlay -->
+    <div x-show="isSaving"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black/60 z-[9999] backdrop-blur-sm flex flex-col items-center justify-center gap-8 print:hidden"
+         style="display: none;">
+        <div class="w-12 h-12 rounded-full border-4 border-white/20 border-t-white animate-spin"></div>
+        <div class="flex flex-col items-center gap-2">
+            <h3 class="text-white font-black text-xl uppercase tracking-[0.2em] animate-pulse">Saving Document</h3>
+            <p class="text-white/60 text-[10px] font-bold uppercase tracking-widest">Please wait while we sync your changes...</p>
         </div>
+    </div>
         @if(!$paid)
             <div
                 class="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none overflow-hidden print:hidden">
@@ -686,8 +832,9 @@ function jsaPageData() {
         @endif
 
         @php
-            $jsa = $project->ai_response['jsa_specifics'] ?? [];
-            $steps = $this->jhaHazards();
+            $aiResponse = $project->ai_response ?? [];
+            $jsa = $aiResponse['jsa_specifics'] ?? [];
+            $steps = $this->steps;
             $jsaTableHeaderColor = \App\Models\Setting::where('key', 'jsa_table_header_color')->value('value') ?? \App\Models\Setting::where('key', 'table_header_color')->value('value') ?? '#2c5f9e';
         @endphp
 
@@ -713,7 +860,7 @@ function jsaPageData() {
                         }
                     }
                 @endphp
-                <div class="text-center mb-4">
+                <div class="text-center mb-4" wire:key="logo-container-{{ $project->id }}">
                     @if($logoSrc)
                         <img src="{{ $logoSrc }}" alt="Company Logo" class="max-h-32 mx-auto object-contain" />
                     @endif
@@ -723,7 +870,7 @@ function jsaPageData() {
                             {{ $logoSrc ? 'Change Logo' : 'Upload Logo' }}
                             <input type="file" wire:model="newLogo" accept="image/*" class="hidden">
                         </label>
-                        <div wire:loading wire:target="newLogo" class="text-xs text-gray-500 mt-1">Uploading...</div>
+                        <span wire:loading wire:target="newLogo" class="ml-2 text-[10px] font-bold text-emerald-600 animate-pulse">Uploading...</span>
                         @error('newLogo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     </div>
                 </div>
@@ -737,8 +884,8 @@ function jsaPageData() {
                 <div class="grid grid-cols-3 border border-black mb-6">
                     <div class="col-span-2 border-r border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Activity/Task:</span>
-                        <input x-show="isEditing" type="text" wire:model="projectName" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
-                        <span x-show="!isEditing" class="text-[14px] break-all overflow-wrap-anywhere">{{ Str::limit($projectName, 100) }}</span>
+                        <input x-show="isEditing" type="text" x-model="projectName" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
+                        <span x-show="!isEditing" class="text-[14px] break-all overflow-wrap-anywhere" x-text="projectName"></span>
                     </div>
                     <div class="border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Date:</span>
@@ -746,30 +893,28 @@ function jsaPageData() {
                     </div>
                     <div class="border-r border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Developed by:</span>
-                        <input x-show="isEditing" type="text" wire:model="preparedBy" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
-                        <span x-show="!isEditing" class="text-[14px] break-all overflow-wrap-anywhere">{{ Str::limit($preparedBy, 100) }}</span>
+                        <input x-show="isEditing" type="text" x-model="preparedBy" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
+                        <span x-show="!isEditing" class="text-[14px] break-all overflow-wrap-anywhere" x-text="preparedBy"></span>
                     </div>
                     <div class="border-r border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Competent Person:</span>
-                        <input x-show="isEditing" type="text" wire:model="competentPerson" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
-                        <span x-show="!isEditing" class="text-[14px]">{{ Str::limit($competentPerson ?? 'N/A', 100) }}</span>
+                        <input x-show="isEditing" type="text" x-model="competentPerson" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
+                        <span x-show="!isEditing" class="text-[14px]" x-text="competentPerson || 'N/A'"></span>
                     </div>
                     <div class="border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Company:</span>
-                        <input x-show="isEditing" type="text" wire:model="companyName" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
-                        <span x-show="!isEditing" class="text-[14px]">{{ Str::limit($companyName, 100) }}</span>
+                        <input x-show="isEditing" type="text" x-model="companyName" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
+                        <span x-show="!isEditing" class="text-[14px]" x-text="companyName"></span>
                     </div>
                     <div class="border-r border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Location:</span>
-                        <input x-show="isEditing" type="text" wire:model="projectLocation" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
-                        <span x-show="!isEditing" class="text-[14px]">{{ Str::limit($projectLocation, 100) }}</span>
+                        <input x-show="isEditing" type="text" x-model="projectLocation" class="w-full border-0 p-0 focus:ring-0 text-[14px]" style="display:none;">
+                        <span x-show="!isEditing" class="text-[14px]" x-text="projectLocation"></span>
                     </div>
                     <div class="col-span-2 border-b border-black p-2">
                         <span class="text-[12px] font-bold block uppercase">Required Equipment:</span>
-                        <textarea x-show="isEditing" wire:model="equipmentTools" class="w-full border-0 p-0 focus:ring-0 text-[14px] resize-none" rows="3" style="display:none;"></textarea>
-                        <div x-show="!isEditing" class="text-[14px] line-clamp-3" title="{{ $equipmentTools }}">
-                            {{ Str::limit($equipmentTools, 319) }}
-                        </div>
+                        <textarea x-show="isEditing" x-model="equipmentTools" class="w-full border-0 p-0 focus:ring-0 text-[14px] resize-none" rows="3" style="display:none;"></textarea>
+                        <div x-show="!isEditing" class="text-[14px] line-clamp-3" :title="equipmentTools" x-text="equipmentTools"></div>
                     </div>
                     <div class="col-span-3 p-2">
                         <span class="text-[12px] font-bold block uppercase mb-1">Required Documentation:</span>
@@ -959,14 +1104,13 @@ function jsaPageData() {
                         </template>
                     </tbody>
                 </table>
-                <div x-show="isEditing" class="print:hidden">
+                <div x-show="isEditing" class="print:hidden mb-12">
                     <button @click="addStep()" type="button"
-                        class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors">
+                        class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors shadow-sm">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                         Add Step
                     </button>
                 </div>
-            @endif
 
                 {{-- Toolbox Talk Section --}}
                 <div class="mt-16 page-break-before">
@@ -1009,11 +1153,26 @@ function jsaPageData() {
                         liable for any damage, claim, or legal action arising from the use of this document.
                     </div>
                 </div>
-
             </div>
 
         </div>
+
     </div>
+
+    <!-- Document Saving Overlay -->
+    <div x-show="isSaving"
+        class="fixed inset-0 bg-black/60 z-[9999] backdrop-blur-sm flex flex-col items-center justify-center gap-8"
+        style="display: none;" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200"
+        x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+        <div class="w-12 h-12 rounded-full border-4 border-white/20 border-t-white animate-spin"></div>
+        <div class="flex flex-col items-center gap-2">
+            <h3 class="text-white font-black text-xl uppercase tracking-[0.2em] animate-pulse">Saving Document</h3>
+            <p class="text-white/60 text-[10px] font-bold uppercase tracking-widest">Please wait while we sync your
+                changes...</p>
+        </div>
+    </div>
+
     <!-- Payment Modal -->
 
 

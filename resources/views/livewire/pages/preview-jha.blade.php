@@ -450,6 +450,7 @@ function jhaPageData() {
         reviewOpen: false,
         proReviewOpen: false,
         isEditing: false,
+        isSaving: false,
         steps: @js(array_values($steps)),
         equipment: @js(array_values($equipment)),
         competentActivities: @js(array_values($competentActivities)),
@@ -474,10 +475,15 @@ function jhaPageData() {
         },
         deleteCompetentActivity(idx) { this.competentActivities.splice(idx, 1); },
         async saveDoc() {
-            this.$wire.$set('steps', this.steps, true);
-            this.$wire.$set('equipment', this.equipment, true);
-            this.$wire.$set('competentActivities', this.competentActivities, true);
-            await this.$wire.save();
+            this.isSaving = true;
+            try {
+                this.$wire.$set('steps', this.steps, true);
+                this.$wire.$set('equipment', this.equipment, true);
+                this.$wire.$set('competentActivities', this.competentActivities, true);
+                await this.$wire.save();
+            } finally {
+                this.isSaving = false;
+            }
         },
         racBg(rac) {
             return { E: '#c0392b', H: '#e67e22', M: '#f1c40f', L: '#27ae60' }[String(rac || '').toUpperCase().charAt(0)] || '#9ca3af';
@@ -520,11 +526,10 @@ function jhaPageData() {
         <div class="flex flex-col gap-3 w-full sm:w-fit">
             @if($paid)
                 <div x-show="isEditing" class="flex flex-wrap gap-3 w-full" style="display:none;">
-                    <button @click="saveDoc()" wire:loading.attr="disabled" wire:target="save" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-60">
-                        <svg wire:loading.remove wire:target="save" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                        <svg wire:loading wire:target="save" class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
-                        <span wire:loading.remove wire:target="save">Save</span>
-                        <span wire:loading wire:target="save">Saving...</span>
+                    <button @click="saveDoc()" :disabled="isSaving" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-60">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        <span x-show="!isSaving">Save</span>
+                        <span x-show="isSaving">Saving...</span>
                     </button>
                     <button @click="isEditing = false; $wire.cancelEdit()" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
                         Cancel
@@ -577,9 +582,6 @@ function jhaPageData() {
 
     <!-- Document Rendering Container -->
         <div class="relative">
-        <div wire:loading wire:target="save" class="fixed inset-0 bg-white/60 z-[100] flex items-center justify-center print:hidden">
-            <svg class="animate-spin text-primary" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
-        </div>
         @if(!$paid)
             <div class="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-20 flex items-center justify-center pointer-events-none overflow-hidden print:hidden">
                 <div class="bg-foreground text-background px-12 py-5 rounded-3xl font-black shadow-2xl rotate-[-7deg] text-2xl tracking-[0.3em] uppercase opacity-90 scale-110">
@@ -643,7 +645,7 @@ function jhaPageData() {
                             {{ $logoSrc ? 'Change Logo' : 'Upload Logo' }}
                             <input type="file" wire:model="newLogo" accept="image/*" class="hidden">
                         </label>
-                        <div wire:loading wire:target="newLogo" class="text-xs text-gray-500 mt-1">Uploading...</div>
+                        <span wire:loading wire:target="newLogo" class="ml-2 text-[10px] font-bold text-emerald-600 animate-pulse">Uploading...</span>
                         @error('newLogo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                     </div>
                 </div>
@@ -1306,4 +1308,20 @@ on JHA. </p>
         .doc-dot:nth-child(2) { animation-delay: 0.6s; }
         .doc-dot:nth-child(3) { animation-delay: 1.2s; }
     </style>
+    <!-- Saving Overlay -->
+    <div x-show="isSaving"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-black/60 z-[9999] backdrop-blur-sm flex flex-col items-center justify-center gap-8 print:hidden"
+         style="display: none;">
+        <div class="w-12 h-12 rounded-full border-4 border-white/20 border-t-white animate-spin"></div>
+        <div class="flex flex-col items-center gap-2">
+            <h3 class="text-white font-black text-xl uppercase tracking-[0.2em] animate-pulse">Saving Document</h3>
+            <p class="text-white/60 text-[10px] font-bold uppercase tracking-widest">Please wait while we sync your changes...</p>
+        </div>
+    </div>
 </div>
