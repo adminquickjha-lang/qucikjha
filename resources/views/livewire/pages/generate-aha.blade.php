@@ -189,6 +189,7 @@ new #[Layout('layouts.safety')] class extends Component {
             }
 
             $content = $aiResponse->text;
+            \Illuminate\Support\Facades\Log::info('AHA AI Raw Response:', ['content' => $content]);
 
             if (preg_match('/```json\s*(.*?)\s*```/s', $content, $matches)) {
                 $content = $matches[1];
@@ -198,15 +199,24 @@ new #[Layout('layouts.safety')] class extends Component {
 
             $decoded = json_decode(trim($content), true);
 
-            if (!$decoded || empty($decoded['steps']) || !is_array($decoded['steps'])) {
+            // Robust check for steps under different common keys
+            $steps = $decoded['steps'] ?? $decoded['aha_steps'] ?? $decoded['activity_steps'] ?? $decoded['job_steps'] ?? null;
+
+            if (!$decoded || empty($steps) || !is_array($steps)) {
+                \Illuminate\Support\Facades\Log::error('AHA Parsing Failed. Decoded Keys:', ['keys' => $decoded ? array_keys($decoded) : 'null']);
                 if ($logoPath)
                     \Illuminate\Support\Facades\Storage::disk('public')->delete($logoPath);
                 $this->dispatch('swal', [
                     'title' => 'Incomplete Response',
-                    'text' => 'The  returned an incomplete document. Please try again.',
+                    'text' => 'The system returned an incomplete document. Please try again.',
                     'icon' => 'error'
                 ]);
                 return;
+            }
+
+            // Ensure decoded steps is correctly assigned back if found under another key
+            if (empty($decoded['steps'])) {
+                $decoded['steps'] = $steps;
             }
 
             $inputTokens = ($aiResponse->usage->promptTokens ?? 0) + ($aiResponse->usage->cacheReadInputTokens ?? 0);

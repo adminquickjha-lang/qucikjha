@@ -189,6 +189,7 @@ new #[Layout('layouts.safety')] class extends Component {
             }
 
             $content = $aiResponse->text;
+            \Illuminate\Support\Facades\Log::info('JSA AI Raw Response:', ['content' => $content]);
 
             if (preg_match('/```json\s*(.*?)\s*```/s', $content, $matches)) {
                 $content = $matches[1];
@@ -198,8 +199,11 @@ new #[Layout('layouts.safety')] class extends Component {
 
             $decoded = json_decode(trim($content), true);
 
-            $steps = $decoded['steps'] ?? $decoded['jsa_steps'] ?? $decoded['safety_steps'] ?? null;
+            // Robust check for steps under different common keys
+            $steps = $decoded['steps'] ?? $decoded['jsa_steps'] ?? $decoded['job_steps'] ?? $decoded['safety_steps'] ?? null;
+
             if (!$decoded || empty($steps) || !is_array($steps)) {
+                \Illuminate\Support\Facades\Log::error('JSA Parsing Failed. Decoded Keys:', ['keys' => $decoded ? array_keys($decoded) : 'null']);
                 if ($logoPath)
                     \Illuminate\Support\Facades\Storage::disk('public')->delete($logoPath);
                 $this->dispatch('swal', [
@@ -208,6 +212,11 @@ new #[Layout('layouts.safety')] class extends Component {
                     'icon' => 'error'
                 ]);
                 return;
+            }
+
+            // Ensure decoded steps is correctly assigned back if found under another key
+            if (empty($decoded['steps'])) {
+                $decoded['steps'] = $steps;
             }
 
             $inputTokens = ($aiResponse->usage->promptTokens ?? 0) + ($aiResponse->usage->cacheReadInputTokens ?? 0);
