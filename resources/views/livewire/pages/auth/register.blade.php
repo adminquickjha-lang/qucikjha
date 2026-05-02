@@ -4,6 +4,7 @@ use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rules;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
@@ -30,6 +31,8 @@ new #[Layout('layouts.safety')] class extends Component {
         event(new Registered($user = User::create($validated)));
 
         Auth::login($user);
+
+        Session::flash('success', "Account created! Welcome aboard, {$user->name}.");
 
         $this->redirect(route('user-dashboard', absolute: false), navigate: true);
     }

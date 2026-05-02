@@ -19,6 +19,9 @@ new #[Layout('layouts.safety')] class extends Component {
 
         Session::regenerate();
 
+        $name = auth()->user()->name;
+        Session::flash('success', "Welcome back, {$name}!");
+
         if (auth()->user()->role === 'admin') {
             $this->redirectIntended(default: route('admin.dashboard', absolute: false), navigate: true);
         } else {

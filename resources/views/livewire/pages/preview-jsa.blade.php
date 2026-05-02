@@ -108,22 +108,37 @@ new #[Layout('layouts.safety')] class extends Component {
     {
         if (!$this->paid)
             return;
-        // Re-read all fields from DB to revert user changes
-        $this->projectName = $this->project->project_name;
-        $this->projectLocation = $this->project->project_location;
-        $this->companyName = $this->project->company_name;
-        $this->preparedBy = $this->project->prepared_by;
-        $this->competentPerson = $this->project->competent_person;
-        $this->steps = $this->project->ai_response['steps'] ?? [];
+        $project = $this->project;
+        $this->projectName = $project->project_name;
+        $this->projectLocation = $project->project_location;
+        $this->companyName = $project->company_name;
+        $this->preparedBy = $project->prepared_by;
+        $this->competentPerson = $project->competent_person;
+        $this->equipmentTools = $project->equipment_tools;
+        $this->steps = $project->ai_response['steps'] ??
+            $project->ai_response['jsa_steps'] ??
+            $project->ai_response['safety_steps'] ?? [];
         foreach ($this->steps as &$step) {
             $rawStep = $step['step_description'] ?? $step['step'] ?? '';
             $step['step_description'] = preg_replace('/^\d+[\.\)]\s*/', '', $rawStep);
         }
-        $this->competentActivities = $this->project->ai_response['competent_activities'] ?? [];
-        while (count($this->competentActivities) < 3) {
-            $this->competentActivities[] = ['activity' => '', 'person' => ''];
-        }
-        $this->equipment = $this->project->ai_response['equipment'] ?? [];
+        $rawDocs = $project->ai_response['jsa_specifics']['documentation'] ?? [];
+        $this->docs = [
+            'hot_work_permit' => (bool) ($rawDocs['hot_work_permit'] ?? false),
+            'confined_space_permit' => (bool) ($rawDocs['confined_space_permit'] ?? false),
+            'mewp_permit' => (bool) ($rawDocs['mewp_permit'] ?? false),
+        ];
+        $ppeKeys = [
+            'safety_glasses', 'face_shield', 'nitrile_gloves', 'respiratory_protection',
+            'safety_shoes', 'chemical_goggles', 'cut_resistant_gloves', 'hearing_protection',
+            'welding_helmet', 'abrasion_resistant_gloves', 'hard_hat', 'fall_protection', 'leather_gloves',
+        ];
+        $rawPpe = $project->ai_response['jsa_specifics']['ppe_checklist'] ?? [];
+        $this->ppe = array_combine($ppeKeys, array_map(fn ($k) => (bool) ($rawPpe[$k] ?? false), $ppeKeys));
+        $this->ppeOthers = array_map(
+            fn ($o) => ['label' => $o, 'checked' => true],
+            $project->ai_response['jsa_specifics']['ppe_others'] ?? []
+        );
         $this->isEditing = false;
         $this->dispatch('edit-closed');
     }
@@ -501,7 +516,7 @@ new #[Layout('layouts.safety')] class extends Component {
                         <span wire:loading.remove wire:target="save">Save</span>
                         <span wire:loading wire:target="save">Saving...</span>
                     </button>
-                    <button wire:click="cancelEdit"
+                    <button @click="isEditing = false; $wire.cancelEdit()"
                         class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
                         Cancel
                     </button>
@@ -601,7 +616,7 @@ new #[Layout('layouts.safety')] class extends Component {
 
     <!-- Document Rendering Container -->
     <div class="relative">
-        <div wire:loading wire:target="toggleEdit,cancelEdit,save" class="fixed inset-0 bg-white/60 z-[100] flex items-center justify-center print:hidden">
+        <div wire:loading wire:target="cancelEdit,save" class="fixed inset-0 bg-white/60 z-[100] flex items-center justify-center print:hidden">
             <svg class="animate-spin text-primary" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
         </div>
         @if(!$paid)

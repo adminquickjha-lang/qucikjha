@@ -5,6 +5,7 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\PayPalController;
 use App\Http\Controllers\StripeController;
 use App\Http\Middleware\IsAdmin;
+use App\Http\Middleware\RedirectIfAuthenticated;
 use App\Models\ProfessionalReview;
 use App\Models\SafetyDocument;
 use App\Models\User;
@@ -14,10 +15,14 @@ use Livewire\Volt\Volt;
 Route::get('/auth/{provider}/redirect', [SocialiteController::class, 'redirect'])->name('social.redirect');
 Route::get('/auth/{provider}/callback', [SocialiteController::class, 'callback'])->name('social.callback');
 
-Volt::route('/', 'pages.landing')->name('landing');
-Volt::route('services/jha', 'pages.services.jha')->name('services.jha');
-Volt::route('services/aha', 'pages.services.aha')->name('services.aha');
-Volt::route('services/jsa', 'pages.services.jsa')->name('services.jsa');
+Route::middleware(RedirectIfAuthenticated::class)->group(function () {
+    Volt::route('/', 'pages.landing')->name('landing');
+    Volt::route('services/jha', 'pages.services.jha')->name('services.jha');
+    Volt::route('services/aha', 'pages.services.aha')->name('services.aha');
+    Volt::route('services/jsa', 'pages.services.jsa')->name('services.jsa');
+    Volt::route('brief', 'pages.brief')->name('brief');
+});
+
 Volt::route('terms', 'pages.terms')->name('terms');
 Volt::route('privacy', 'pages.privacy')->name('privacy');
 Volt::route('refund', 'pages.refund')->name('refund');
@@ -67,8 +72,6 @@ Volt::route('preview/aha/{id}', 'pages.preview-aha')
 Volt::route('preview/jsa/{id}', 'pages.preview-jsa')
     ->middleware(['auth', 'verified'])
     ->name('preview.jsa');
-
-Volt::route('brief', 'pages.brief')->name('brief');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/stripe/checkout/{document}', [StripeController::class, 'checkout'])->name('stripe.checkout');

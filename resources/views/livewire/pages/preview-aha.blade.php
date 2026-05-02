@@ -497,7 +497,7 @@ new #[Layout('layouts.safety')] class extends Component {
                         <span wire:loading.remove wire:target="save">Save</span>
                         <span wire:loading wire:target="save">Saving...</span>
                     </button>
-                    <button wire:click="cancelEdit" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
+                    <button @click="isEditing = false; $wire.cancelEdit()" class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg">
                         Cancel
                     </button>
                 </div>
@@ -548,7 +548,7 @@ new #[Layout('layouts.safety')] class extends Component {
 
     <!-- Document Rendering Container -->
         <div class="relative">
-        <div wire:loading wire:target="toggleEdit,cancelEdit,save" class="fixed inset-0 bg-white/60 z-[100] flex items-center justify-center print:hidden">
+        <div wire:loading wire:target="cancelEdit,save" class="fixed inset-0 bg-white/60 z-[100] flex items-center justify-center print:hidden">
             <svg class="animate-spin text-primary" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>
         </div>
         @if(!$paid)
