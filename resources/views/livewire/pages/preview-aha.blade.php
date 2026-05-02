@@ -467,7 +467,45 @@ new #[Layout('layouts.safety')] class extends Component {
     }
 }; ?>
 
-<div x-data="{ reviewOpen: false, proReviewOpen: false, isEditing: false }" x-on:edit-closed.window="isEditing = false" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
+<div x-data="ahaPageData()" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
+    <script>
+        function ahaPageData() {
+            return {
+                reviewOpen: false,
+                proReviewOpen: false,
+                isEditing: false,
+                steps: @js(array_values($steps)),
+                addStep() {
+                    this.steps.push({ step_description: '', hazards: [''], controls: [''], rac: 'M' });
+                },
+                deleteStep(idx) { this.steps.splice(idx, 1); },
+                addStepItem(si, field) {
+                    if (!Array.isArray(this.steps[si][field])) {
+                        let val = this.steps[si][field] || '';
+                        this.steps[si][field] = [val];
+                    }
+                    this.steps[si][field].push('');
+                },
+                deleteStepItem(si, field, ii) { this.steps[si][field].splice(ii, 1); },
+                async saveDoc() {
+                    this.$wire.$set('steps', this.steps, true);
+                    await this.$wire.save();
+                },
+                racBg(rac) {
+                    return { E: '#c0392b', H: '#e67e22', M: '#f1c40f', L: '#27ae60' }[String(rac || '').toUpperCase().charAt(0)] || '#9ca3af';
+                },
+                racFg(rac) {
+                    return ['M', 'L'].includes(String(rac || '').toUpperCase().charAt(0)) ? '#000' : '#fff';
+                },
+                init() {
+                    this.$wire.on('edit-closed', ({ steps }) => {
+                        if (steps) this.steps = steps;
+                        this.isEditing = false;
+                    });
+                }
+            };
+        }
+    </script>
     <!-- Header Controls -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 print:hidden">
         <div class="flex-1 min-w-0">
@@ -812,67 +850,22 @@ on AHA. </p>
                             <th x-show="isEditing" class="px-2 py-3 border border-gray-400 w-10 print:hidden" style="display:none;"></th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody x-show="!isEditing">
                         @foreach($steps as $i => $h)
-                            <tr class="bg-white" wire:key="step-{{ $i }}">
+                            <tr class="bg-white">
                                 <td class="px-3 py-3 border border-gray-300 font-bold text-gray-900 align-top">
                                     {{ $i + 1 }}.
-                                    <textarea x-show="isEditing" wire:model="steps.{{ $i }}.step_description" class="w-full border-0 p-0 focus:ring-0 font-bold bg-transparent resize-none" rows="3" style="display:none;"></textarea>
-                                    <span x-show="!isEditing">{{ preg_replace('/^(?:Step\s*\d+[\.\:\-\s]*|\d+[\.\-\s]+)+/i', '', $h['step_description'] ?? $h['step'] ?? 'N/A') }}</span>
+                                    <span>{{ preg_replace('/^(?:Step\s*\d+[\.\:\-\s]*|\d+[\.\-\s]+)+/i', '', $h['step_description'] ?? $h['step'] ?? 'N/A') }}</span>
                                 </td>
                                 <td class="px-3 py-3 border border-gray-300 align-top text-black">
-                                    <div x-show="isEditing" style="display:none;">
-                                        @if(is_array($h['hazards']))
-                                            <ol class="list-decimal ml-4 space-y-2">
-                                                @foreach($h['hazards'] as $hj => $hazard)
-                                                    <li class="flex items-center gap-1">
-                                                        <input type="text" wire:model="steps.{{ $i }}.hazards.{{ $hj }}" class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
-                                                        <button wire:click="deleteStepItem({{ $i }}, 'hazards', {{ $hj }})" type="button" class="text-red-400 hover:text-red-600 flex-shrink-0">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                                        </button>
-                                                    </li>
-                                                @endforeach
-                                            </ol>
-                                            <button wire:click="addStepItem({{ $i }}, 'hazards')" type="button" class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                                                Add
-                                            </button>
-                                        @else
-                                            <textarea wire:model="steps.{{ $i }}.hazards" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
-                                        @endif
-                                    </div>
-                                    <div x-show="!isEditing">
-                                        @if(is_array($h['hazards']))
-                                            <ol class="list-decimal ml-3 space-y-2">@foreach($h['hazards'] as $hazard)<li>{{ $hazard }}</li>@endforeach</ol>
-                                        @else {!! nl2br(e($h['hazards'] ?? $h['hazard'] ?? 'N/A')) !!} @endif
-                                    </div>
+                                    @if(is_array($h['hazards']))
+                                        <ol class="list-decimal ml-3 space-y-2">@foreach($h['hazards'] as $hazard)<li>{{ $hazard }}</li>@endforeach</ol>
+                                    @else {!! nl2br(e($h['hazards'] ?? $h['hazard'] ?? 'N/A')) !!} @endif
                                 </td>
                                 <td class="px-3 py-3 border border-gray-300 align-top text-black">
-                                    <div x-show="isEditing" style="display:none;">
-                                        @if(is_array($h['controls']))
-                                            <ol class="list-decimal ml-4 space-y-2">
-                                                @foreach($h['controls'] as $hc => $control)
-                                                    <li class="flex items-center gap-1">
-                                                        <input type="text" wire:model="steps.{{ $i }}.controls.{{ $hc }}" class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
-                                                        <button wire:click="deleteStepItem({{ $i }}, 'controls', {{ $hc }})" type="button" class="text-red-400 hover:text-red-600 flex-shrink-0">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                                        </button>
-                                                    </li>
-                                                @endforeach
-                                            </ol>
-                                            <button wire:click="addStepItem({{ $i }}, 'controls')" type="button" class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                                                Add
-                                            </button>
-                                        @else
-                                            <textarea wire:model="steps.{{ $i }}.controls" class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none" rows="3"></textarea>
-                                        @endif
-                                    </div>
-                                    <div x-show="!isEditing">
-                                        @if(is_array($h['controls']))
-                                            <ol class="list-decimal ml-3 space-y-2">@foreach($h['controls'] as $control)<li>{{ $control }}</li>@endforeach</ol>
-                                        @else {!! nl2br(e($h['controls'] ?? $h['control'] ?? 'N/A')) !!} @endif
-                                    </div>
+                                    @if(is_array($h['controls']))
+                                        <ol class="list-decimal ml-3 space-y-2">@foreach($h['controls'] as $control)<li>{{ $control }}</li>@endforeach</ol>
+                                    @else {!! nl2br(e($h['controls'] ?? $h['control'] ?? 'N/A')) !!} @endif
                                 </td>
                                 @php
                                     $rac = $h['rac'] ?? $h['risk'] ?? 'N/A';
@@ -886,24 +879,77 @@ on AHA. </p>
                                     $racColor = $racColors[$racChar] ?? $racColors[$rac] ?? '#9ca3af';
                                     $textColor = in_array($racChar, ['M', 'L']) && $racColor == '#f1c40f' ? '#000' : (in_array($racChar, ['M']) ? '#000' : '#fff');
                                 @endphp
-                                <td class="border border-gray-300 text-center align-middle font-black text-[14px]" :style="isEditing ? 'background-color: #fff; color: #000;' : 'background-color: {{ $racColor }}; color: {{ $textColor }};'" style="width: 70px;">
-                                    <select x-show="isEditing" wire:model.live="steps.{{ $i }}.rac"
-                                        class="w-full text-sm font-bold border border-gray-400 rounded px-1 py-1.5 focus:ring-1 focus:ring-blue-500 bg-white text-black cursor-pointer" style="display:none;">
-                                        <option value="E" style="background:#c0392b;color:#fff;">E — Extreme</option>
-                                        <option value="H" style="background:#e67e22;color:#fff;">H — High</option>
-                                        <option value="M" style="background:#f1c40f;color:#000;">M — Medium</option>
-                                        <option value="L" style="background:#27ae60;color:#fff;">L — Low</option>
-                                    </select>
-                                    <span x-show="!isEditing">{{ $racDisp }}</span>
-                                </td>
-                                <td x-show="isEditing" class="border border-gray-300 p-2 align-top print:hidden" style="display:none;">
-                                    <button wire:click="deleteStep({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                    </button>
+                                <td class="border border-gray-300 text-center align-middle font-black text-[14px]" style="background-color: {{ $racColor }}; color: {{ $textColor }}; width: 70px;">
+                                    <span>{{ $racDisp }}</span>
                                 </td>
                             </tr>
                         @endforeach
                     </tbody>
+
+                    <tbody x-show="isEditing" wire:ignore style="display:none;">
+                        <template x-for="(step, i) in steps" :key="i">
+                            <tr class="bg-white">
+                                <td class="px-3 py-3 border border-gray-300 font-bold text-gray-900 align-top">
+                                    <span x-text="i + 1"></span>.
+                                    <textarea x-model="step.step_description" class="w-full border-0 p-0 focus:ring-0 font-bold bg-transparent resize-none" rows="3"></textarea>
+                                </td>
+                                <td class="px-3 py-3 border border-gray-300 align-top text-black">
+                                    <ol class="list-decimal ml-4 space-y-2">
+                                        <template x-for="(hazard, hi) in step.hazards" :key="hi">
+                                            <li class="flex items-center gap-1">
+                                                <input type="text" x-model="step.hazards[hi]" class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                <button @click="deleteStepItem(i, 'hazards', hi)" type="button" class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                </button>
+                                            </li>
+                                        </template>
+                                    </ol>
+                                    <button @click="addStepItem(i, 'hazards')" type="button" class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                        Add
+                                    </button>
+                                </td>
+                                <td class="px-3 py-3 border border-gray-300 align-top text-black">
+                                    <ol class="list-decimal ml-4 space-y-2">
+                                        <template x-for="(control, ci) in step.controls" :key="ci">
+                                            <li class="flex items-center gap-1">
+                                                <input type="text" x-model="step.controls[ci]" class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                <button @click="deleteStepItem(i, 'controls', ci)" type="button" class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                </button>
+                                            </li>
+                                        </template>
+                                    </ol>
+                                    <button @click="addStepItem(i, 'controls')" type="button" class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                        Add
+                                    </button>
+                                </td>
+                                <td class="border border-gray-300 text-center align-middle font-black text-[14px]" :style="'background-color: ' + racBg(step.rac) + '; color: ' + racFg(step.rac) + '; width: 70px;'">
+                                    <select x-model="step.rac" class="w-full text-sm font-bold border border-gray-400 rounded p-1 focus:ring-1 focus:ring-blue-500 bg-white text-black cursor-pointer">
+                                        <option value="E">E</option>
+                                        <option value="H">H</option>
+                                        <option value="M">M</option>
+                                        <option value="L">L</option>
+                                    </select>
+                                </td>
+                                <td class="border border-gray-300 p-2 align-top print:hidden">
+                                    <button @click="deleteStep(i)" type="button" class="text-slate-700 hover:text-black transition-colors">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div x-show="isEditing" class="print:hidden">
+                <button @click="addStep()" type="button"
+                    class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    Add Step
+                </button>
+            </div>
                 </table>
             </div>
             <button x-show="isEditing" wire:click="addStep" type="button"

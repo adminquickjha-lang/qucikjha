@@ -468,7 +468,57 @@ new #[Layout('layouts.safety')] class extends Component {
     }
 }; ?>
 
-<div x-data="{ reviewOpen: false, proReviewOpen: false, isEditing: false }" x-on:edit-closed.window="isEditing = false" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
+<script>
+function jsaPageData() {
+    return {
+        reviewOpen: false,
+        proReviewOpen: false,
+        isEditing: false,
+        steps: @js(array_values($steps)),
+        docs: @js($docs),
+        ppe: @js($ppe),
+        ppeOthers: @js($ppeOthers),
+        addStep() {
+            this.steps.push({
+                step_description: '',
+                hazards: [''],
+                controls: [''],
+                responsibilities: ['Site Supervisor']
+            });
+        },
+        deleteStep(idx) { this.steps.splice(idx, 1); },
+        addStepItem(si, field) {
+            if (!Array.isArray(this.steps[si][field])) {
+                let currentVal = this.steps[si][field] || '';
+                this.steps[si][field] = [currentVal];
+            }
+            this.steps[si][field].push('');
+        },
+        deleteStepItem(si, field, ii) { this.steps[si][field].splice(ii, 1); },
+        toggleDoc(key) { this.docs[key] = !this.docs[key]; },
+        togglePpe(key) { this.ppe[key] = !this.ppe[key]; },
+        togglePpeOther(idx) { this.ppeOthers[idx].checked = !this.ppeOthers[idx].checked; },
+        async saveDoc() {
+            this.$wire.$set('steps', this.steps, true);
+            this.$wire.$set('docs', this.docs, true);
+            this.$wire.$set('ppe', this.ppe, true);
+            this.$wire.$set('ppeOthers', this.ppeOthers, true);
+            await this.$wire.save();
+        },
+        init() {
+            this.$wire.on('edit-closed', ({ steps, docs, ppe, ppeOthers }) => {
+                if (steps) this.steps = steps;
+                if (docs) this.docs = docs;
+                if (ppe) this.ppe = ppe;
+                if (ppeOthers) this.ppeOthers = ppeOthers;
+                this.isEditing = false;
+            });
+        }
+    };
+}
+</script>
+
+<div x-data="jsaPageData()" class="pt-4 pb-20 px-4 max-w-6xl mx-auto print:pt-0 print:pb-0 print:px-0 min-h-screen">
     <!-- Header Controls -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 print:hidden">
         <div class="flex-1 min-w-0">
@@ -504,7 +554,7 @@ new #[Layout('layouts.safety')] class extends Component {
         <div class="flex flex-col gap-3 w-full sm:w-fit">
             @if($paid)
                 <div x-show="isEditing" class="flex flex-wrap gap-3 w-full" style="display:none;">
-                    <button wire:click="save" wire:loading.attr="disabled" wire:target="save"
+                    <button @click="saveDoc()" wire:loading.attr="disabled" wire:target="save"
                         class="flex-1 justify-center bg-primary text-primary-foreground font-black px-4 py-2.5 rounded-xl text-sm uppercase tracking-wider flex items-center gap-3 hover:brightness-110 active:scale-[0.98] transition-all shadow-lg disabled:opacity-60">
                         <svg wire:loading.remove wire:target="save" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -726,8 +776,8 @@ new #[Layout('layouts.safety')] class extends Component {
                         <div class="flex items-center gap-6">
                             @foreach(['hot_work_permit' => 'Hot Work Permit', 'confined_space_permit' => 'Confined Space Permit', 'mewp_permit' => 'MEWP Permit'] as $docKey => $docLabel)
                                 <div class="flex items-center gap-2" :class="isEditing ? 'cursor-pointer select-none' : ''"
-                                    x-on:click="isEditing && $wire.toggleDoc('{{ $docKey }}')">
-                                    <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none" :class="isEditing ? 'hover:bg-blue-50' : ''">{!! ($docs[$docKey] ?? false) ? '&#10003;' : '' !!}</span>
+                                    x-on:click="isEditing && toggleDoc('{{ $docKey }}')">
+                                    <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none" :class="isEditing ? 'hover:bg-blue-50' : ''" x-html="docs['{{ $docKey }}'] ? '&#10003;' : ''"></span>
                                     <span class="text-[12px]">{{ $docLabel }}</span>
                                 </div>
                             @endforeach
@@ -760,18 +810,18 @@ new #[Layout('layouts.safety')] class extends Component {
                         @endphp
                         @foreach($ppeItems as $key => $label)
                             <div class="flex items-center gap-2" :class="isEditing ? 'cursor-pointer select-none' : ''"
-                                x-on:click="isEditing && $wire.togglePpe('{{ $key }}')">
-                                <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none" :class="isEditing ? 'hover:bg-blue-50' : ''">{!! ($ppe[$key] ?? false) ? '&#10003;' : '' !!}</span>
-                                <span class="text-[12px]">{{ $label }}</span>
+                                x-on:click="isEditing && togglePpe('{{ $key }}')">
+                                <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none" :class="isEditing ? 'hover:bg-blue-50' : ''" x-html="ppe['{{ $key }}'] ? '&#10003;' : ''"></span>
+                                <span class="text-[12px] uppercase">{{ $label }}</span>
                             </div>
                         @endforeach
-                        @foreach($ppeOthers as $oi => $other)
+                        <template x-for="(other, idx) in ppeOthers" :key="idx">
                             <div class="flex items-center gap-2" :class="isEditing ? 'cursor-pointer select-none' : ''"
-                                x-on:click="isEditing && $wire.togglePpeOther({{ $oi }})">
-                                <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none" :class="isEditing ? 'hover:bg-blue-50' : ''">{!! $other['checked'] ? '&#10003;' : '' !!}</span>
-                                <span class="text-[12px]">{{ $other['label'] }}</span>
+                                x-on:click="isEditing && togglePpeOther(idx)">
+                                <span class="w-3 h-3 border border-black inline-flex items-center justify-center text-[10px] font-bold leading-none" :class="isEditing ? 'hover:bg-blue-50' : ''" x-html="other.checked ? '&#10003;' : ''"></span>
+                                <span class="text-[12px] uppercase" x-text="other.label"></span>
                             </div>
-                        @endforeach
+                        </template>
                     </div>
                 </div>
 
@@ -790,44 +840,14 @@ new #[Layout('layouts.safety')] class extends Component {
                         </tr>
                     </thead>
                     <tbody class="text-[14px]">
-                        @foreach($steps as $i => $step)
-                            <tr wire:key="step-{{ $i }}">
-                                <td class="border border-black p-4 font-bold align-top">
-                                    {{ $i + 1 }}.
-                                    @if($isEditing)
-                                        <textarea wire:model="steps.{{ $i }}.step_description"
-                                            class="w-full border-0 p-0 focus:ring-0 font-bold bg-transparent resize-none"
-                                            rows="3"></textarea>
-                                    @else
+                        <tbody x-show="!isEditing">
+                            @foreach($steps as $i => $step)
+                                <tr class="bg-white">
+                                    <td class="border border-black p-4 font-bold align-top">
+                                        {{ $i + 1 }}.
                                         {{ preg_replace('/^(?:Step\s*\d+[\.\:\-\s]*|\d+[\.\-\s]+)+/i', '', $step['step_description'] ?? $step['step'] ?? '') }}
-                                    @endif
-                                </td>
-                                <td class="border border-black p-4 align-top">
-                                    @if($isEditing)
-                                        @if(is_array($step['hazards']))
-                                            <ol class="list-decimal ml-4 space-y-2">
-                                                @foreach($step['hazards'] as $hj => $hazard)
-                                                    <li class="flex items-center gap-1">
-                                                        <input type="text" wire:model="steps.{{ $i }}.hazards.{{ $hj }}"
-                                                            class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
-                                                        <button wire:click="deleteStepItem({{ $i }}, 'hazards', {{ $hj }})" type="button"
-                                                            class="text-red-400 hover:text-red-600 flex-shrink-0">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                                        </button>
-                                                    </li>
-                                                @endforeach
-                                            </ol>
-                                            <button wire:click="addStepItem({{ $i }}, 'hazards')" type="button"
-                                                class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                                                Add
-                                            </button>
-                                        @else
-                                            <textarea wire:model="steps.{{ $i }}.hazards"
-                                                class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none"
-                                                rows="3"></textarea>
-                                        @endif
-                                    @else
+                                    </td>
+                                    <td class="border border-black p-4 align-top">
                                         @if(is_array($step['hazards']))
                                             <ol class="list-decimal ml-5 space-y-1">
                                                 @foreach($step['hazards'] as $h)
@@ -837,34 +857,8 @@ new #[Layout('layouts.safety')] class extends Component {
                                         @else
                                             {{ $step['hazards'] }}
                                         @endif
-                                    @endif
-                                </td>
-                                <td class="border border-black p-4 align-top">
-                                    @if($isEditing)
-                                        @if(is_array($step['controls']))
-                                            <ol class="list-decimal ml-4 space-y-2">
-                                                @foreach($step['controls'] as $hc => $control)
-                                                    <li class="flex items-center gap-1">
-                                                        <input type="text" wire:model="steps.{{ $i }}.controls.{{ $hc }}"
-                                                            class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
-                                                        <button wire:click="deleteStepItem({{ $i }}, 'controls', {{ $hc }})" type="button"
-                                                            class="text-red-400 hover:text-red-600 flex-shrink-0">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                                        </button>
-                                                    </li>
-                                                @endforeach
-                                            </ol>
-                                            <button wire:click="addStepItem({{ $i }}, 'controls')" type="button"
-                                                class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                                                Add
-                                            </button>
-                                        @else
-                                            <textarea wire:model="steps.{{ $i }}.controls"
-                                                class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none"
-                                                rows="3"></textarea>
-                                        @endif
-                                    @else
+                                    </td>
+                                    <td class="border border-black p-4 align-top">
                                         @if(is_array($step['controls']))
                                             <ol class="list-decimal ml-5 space-y-1">
                                                 @foreach($step['controls'] as $c)
@@ -874,35 +868,8 @@ new #[Layout('layouts.safety')] class extends Component {
                                         @else
                                             {{ $step['controls'] }}
                                         @endif
-                                    @endif
-                                </td>
-                                <td class="border border-black p-4 align-top">
-                                    @if($isEditing)
-                                        @php $resp = $step['responsibilities'] ?? $step['responsibility'] ?? ['Site Supervisor']; @endphp
-                                        @if(is_array($resp))
-                                            <ol class="list-decimal ml-4 space-y-2">
-                                                @foreach($resp as $hr => $r)
-                                                    <li class="flex items-center gap-1">
-                                                        <input type="text" wire:model="steps.{{ $i }}.responsibilities.{{ $hr }}"
-                                                            class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
-                                                        <button wire:click="deleteStepItem({{ $i }}, 'responsibilities', {{ $hr }})" type="button"
-                                                            class="text-red-400 hover:text-red-600 flex-shrink-0">
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                                        </button>
-                                                    </li>
-                                                @endforeach
-                                            </ol>
-                                            <button wire:click="addStepItem({{ $i }}, 'responsibilities')" type="button"
-                                                class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                                                Add
-                                            </button>
-                                        @else
-                                            <textarea wire:model="steps.{{ $i }}.responsibilities"
-                                                class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none"
-                                                rows="2"></textarea>
-                                        @endif
-                                    @else
+                                    </td>
+                                    <td class="border border-black p-4 align-top">
                                         @if(is_array($step['responsibilities'] ?? $step['responsibility'] ?? ['Site Supervisor']))
                                             <ol class="list-decimal ml-5 space-y-1">
                                                 @foreach($step['responsibilities'] ?? $step['responsibility'] ?? ['Site Supervisor'] as $r)
@@ -912,27 +879,94 @@ new #[Layout('layouts.safety')] class extends Component {
                                         @else
                                             {{ $step['responsibilities'] ?? $step['responsibility'] ?? 'Site Supervisor' }}
                                         @endif
-                                    @endif
-                                </td>
-                                @if($isEditing)
-                                    <td class="border border-black p-2 align-top print:hidden">
-                                        <button wire:click="deleteStep({{ $i }})" type="button"
-                                            class="text-red-400 hover:text-red-600 mt-1">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                        <tbody x-show="isEditing" wire:ignore style="display:none;">
+                            <template x-for="(step, i) in steps" :key="i">
+                                <tr class="bg-white">
+                                    <td class="border border-black p-3 font-bold align-top">
+                                        <span x-text="i + 1"></span>.
+                                        <textarea x-model="step.step_description" 
+                                            class="w-full border-gray-200 rounded p-2 text-sm focus:ring-1 focus:ring-blue-500 bg-transparent resize-none"
+                                            rows="3"></textarea>
+                                    </td>
+                                    <td class="border border-black p-3 align-top">
+                                        <ol class="list-decimal ml-4 space-y-2">
+                                            <template x-for="(hazard, hi) in step.hazards" :key="hi">
+                                                <li class="flex items-center gap-1">
+                                                    <input type="text" x-model="step.hazards[hi]"
+                                                        class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                    <button @click="deleteStepItem(i, 'hazards', hi)" type="button"
+                                                        class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                    </button>
+                                                </li>
+                                            </template>
+                                        </ol>
+                                        <button @click="addStepItem(i, 'hazards')" type="button"
+                                            class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                            Add
                                         </button>
                                     </td>
-                                @endif
+                                    <td class="border border-black p-3 align-top">
+                                        <ol class="list-decimal ml-4 space-y-2">
+                                            <template x-for="(control, ci) in step.controls" :key="ci">
+                                                <li class="flex items-center gap-1">
+                                                    <input type="text" x-model="step.controls[ci]"
+                                                        class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                    <button @click="deleteStepItem(i, 'controls', ci)" type="button"
+                                                        class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                    </button>
+                                                </li>
+                                            </template>
+                                        </ol>
+                                        <button @click="addStepItem(i, 'controls')" type="button"
+                                            class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                            Add
+                                        </button>
+                                    </td>
+                                    <td class="border border-black p-3 align-top">
+                                        <ol class="list-decimal ml-4 space-y-2">
+                                            <template x-for="(resp, ri) in step.responsibilities" :key="ri">
+                                                <li class="flex items-center gap-1">
+                                                    <input type="text" x-model="step.responsibilities[ri]"
+                                                        class="flex-1 border-gray-200 rounded p-1 text-sm focus:ring-1 focus:ring-blue-500">
+                                                    <button @click="deleteStepItem(i, 'responsibilities', ri)" type="button"
+                                                        class="text-red-400 hover:text-red-600 flex-shrink-0">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                                    </button>
+                                                </li>
+                                            </template>
+                                        </ol>
+                                        <button @click="addStepItem(i, 'responsibilities')" type="button"
+                                            class="text-green-600 hover:text-green-700 text-xs mt-1 flex items-center gap-1 ml-4">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                                            Add
+                                        </button>
+                                    </td>
+                                <td class="border border-black p-2 align-top print:hidden">
+                                    <button @click="deleteStep(i)" type="button"
+                                        class="text-slate-700 hover:text-black transition-colors">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                    </button>
+                                </td>
                             </tr>
-                        @endforeach
+                        </template>
                     </tbody>
                 </table>
-                @if($isEditing)
-                    <button wire:click="addStep" type="button"
-                        class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden">
+                <div x-show="isEditing" class="print:hidden">
+                    <button @click="addStep()" type="button"
+                        class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                         Add Step
                     </button>
-                @endif
+                </div>
+            @endif
 
                 {{-- Toolbox Talk Section --}}
                 <div class="mt-16 page-break-before">
