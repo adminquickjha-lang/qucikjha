@@ -205,7 +205,7 @@ new #[Layout('layouts.safety')] class extends Component {
                     \Illuminate\Support\Facades\Storage::disk('public')->delete($logoPath);
                 $this->dispatch('swal', [
                     'title' => 'Incomplete Response',
-                    'text' => 'The AI returned an incomplete document. Please try again.',
+                    'text' => 'The system returned an incomplete document. Please try again.',
                     'icon' => 'error'
                 ]);
                 return;
@@ -215,7 +215,7 @@ new #[Layout('layouts.safety')] class extends Component {
             $outputTokens = ($aiResponse->usage->completionTokens ?? 0) + ($aiResponse->usage->reasoningTokens ?? 0);
             $cost = \App\Services\AiPricingService::calculateCost($inputTokens, $outputTokens);
 
-            // Only create the record once we have a valid, complete response
+
             $doc = \App\Models\SafetyDocument::create([
                 'user_id' => auth()->id(),
                 'company_name' => $this->company,

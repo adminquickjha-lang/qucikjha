@@ -475,6 +475,7 @@ new #[Layout('layouts.safety')] class extends Component {
                 proReviewOpen: false,
                 isEditing: false,
                 steps: @js(array_values($steps)),
+                hazardsChecklist: @js($hazardsChecklist),
                 addStep() {
                     this.steps.push({ step_description: '', hazards: [''], controls: [''], rac: 'M' });
                 },
@@ -487,8 +488,12 @@ new #[Layout('layouts.safety')] class extends Component {
                     this.steps[si][field].push('');
                 },
                 deleteStepItem(si, field, ii) { this.steps[si][field].splice(ii, 1); },
+                toggleHazard(idx) {
+                    this.hazardsChecklist[idx] = !this.hazardsChecklist[idx];
+                },
                 async saveDoc() {
                     this.$wire.$set('steps', this.steps, true);
+                    this.$wire.$set('hazardsChecklist', this.hazardsChecklist, true);
                     await this.$wire.save();
                 },
                 racBg(rac) {
@@ -498,8 +503,9 @@ new #[Layout('layouts.safety')] class extends Component {
                     return ['M', 'L'].includes(String(rac || '').toUpperCase().charAt(0)) ? '#000' : '#fff';
                 },
                 init() {
-                    this.$wire.on('edit-closed', ({ steps }) => {
+                    this.$wire.on('edit-closed', ({ steps, hazardsChecklist }) => {
                         if (steps) this.steps = steps;
+                        if (hazardsChecklist) this.hazardsChecklist = hazardsChecklist;
                         this.isEditing = false;
                     });
                 }
@@ -950,13 +956,6 @@ on AHA. </p>
                     Add Step
                 </button>
             </div>
-                </table>
-            </div>
-            <button x-show="isEditing" wire:click="addStep" type="button"
-                class="mt-3 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-2 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden" style="display:none;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                Add Step
-            </button>
 
             {{-- Hazards Checklist --}}
             @php
@@ -986,11 +985,10 @@ on AHA. </p>
                                 <ul class="list-none m-0 p-0 space-y-1">
                                     @foreach($chunk as $qi)
                                         <li class="flex items-start gap-2" :class="isEditing ? 'cursor-pointer select-none' : ''"
-                                            x-on:click="isEditing && $wire.toggleHazard({{ $qi }})">
-                                            <span class="font-bold text-[18px] leading-none text-black flex-shrink-0">
-                                                {!! ($hazardsChecklist[$qi] ?? false) ? '☑' : '☐' !!}
+                                            @click="if(isEditing) toggleHazard({{ $qi }})">
+                                            <span class="font-bold text-[18px] leading-none text-black flex-shrink-0" x-text="hazardsChecklist[{{ $qi }}] ? '☑' : '☐'">
                                             </span>
-                                            <span class="text-black {{ ($hazardsChecklist[$qi] ?? false) ? 'font-bold' : '' }}">
+                                            <span class="text-black" :class="hazardsChecklist[{{ $qi }}] ? 'font-bold' : ''">
                                                 {{ $staticQuestions[$qi] }}
                                             </span>
                                         </li>

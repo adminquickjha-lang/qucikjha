@@ -204,7 +204,7 @@ new #[Layout('layouts.safety')] class extends Component {
                     \Illuminate\Support\Facades\Storage::disk('public')->delete($logoPath);
                 $this->dispatch('swal', [
                     'title' => 'Incomplete Response',
-                    'text' => 'The AI returned an incomplete document. Please try again.',
+                    'text' => 'The system returned an incomplete document. Please try again.',
                     'icon' => 'error'
                 ]);
                 return;

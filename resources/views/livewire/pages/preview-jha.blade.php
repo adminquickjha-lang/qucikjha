@@ -451,6 +451,8 @@ function jhaPageData() {
         proReviewOpen: false,
         isEditing: false,
         steps: @js(array_values($steps)),
+        equipment: @js(array_values($equipment)),
+        competentActivities: @js(array_values($competentActivities)),
         addStep() {
             this.steps.push({ step_description: '', hazards: [''], controls: [''], initial_rac: 'M' });
         },
@@ -463,8 +465,18 @@ function jhaPageData() {
             this.steps[si][field].push('');
         },
         deleteStepItem(si, field, ii) { this.steps[si][field].splice(ii, 1); },
+        addEquipment() {
+            this.equipment.push({ name: '', training: '', inspection: '' });
+        },
+        deleteEquipment(idx) { this.equipment.splice(idx, 1); },
+        addCompetentActivity() {
+            this.competentActivities.push({ activity: '', person: '' });
+        },
+        deleteCompetentActivity(idx) { this.competentActivities.splice(idx, 1); },
         async saveDoc() {
             this.$wire.$set('steps', this.steps, true);
+            this.$wire.$set('equipment', this.equipment, true);
+            this.$wire.$set('competentActivities', this.competentActivities, true);
             await this.$wire.save();
         },
         racBg(rac) {
@@ -474,8 +486,10 @@ function jhaPageData() {
             return ['M', 'L'].includes(String(rac || '').toUpperCase().charAt(0)) ? '#000' : '#fff';
         },
         init() {
-            this.$wire.on('edit-closed', ({ steps }) => {
+            this.$wire.on('edit-closed', ({ steps, equipment, competentActivities }) => {
                 if (steps) this.steps = steps;
+                if (equipment) this.equipment = equipment;
+                if (competentActivities) this.competentActivities = competentActivities;
                 this.isEditing = false;
             });
         }
@@ -947,39 +961,54 @@ on JHA. </p>
                         <th x-show="isEditing" class="px-2 py-2 border border-gray-400 w-10 print:hidden" style="display:none;"></th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody x-show="!isEditing">
                     @forelse($equipment as $i => $eq)
                         <tr class="{{ $i % 2 === 1 ? 'bg-gray-50' : 'bg-white' }}">
                             <td class="px-3 py-2.5 border border-gray-300 text-black">
-                                <input x-show="isEditing" type="text" wire:model="equipment.{{ $i }}.equipment" class="w-full border-0 p-0 focus:ring-0 bg-transparent" style="display:none;">
-                                <span x-show="!isEditing">{{ $eq['equipment'] ?? '' }}</span>
+                                <span>{{ $eq['equipment'] ?? $eq['name'] ?? '' }}</span>
                             </td>
                             <td class="px-3 py-2.5 border border-gray-300 text-black">
-                                <input x-show="isEditing" type="text" wire:model="equipment.{{ $i }}.training" class="w-full border-0 p-0 focus:ring-0 bg-transparent" style="display:none;">
-                                <span x-show="!isEditing">{{ $eq['training'] ?? '' }}</span>
+                                <span>{{ $eq['training'] ?? '' }}</span>
                             </td>
                             <td class="px-3 py-2.5 border border-gray-300 text-black">
-                                <input x-show="isEditing" type="text" wire:model="equipment.{{ $i }}.inspection" class="w-full border-0 p-0 focus:ring-0 bg-transparent" style="display:none;">
-                                <span x-show="!isEditing">{{ $eq['inspection'] ?? '' }}</span>
-                            </td>
-                            <td x-show="isEditing" class="border border-gray-300 p-2 align-middle print:hidden" style="display:none;">
-                                <button wire:click="deleteEquipment({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                </button>
+                                <span>{{ $eq['inspection'] ?? '' }}</span>
                             </td>
                         </tr>
                     @empty
                         <tr class="bg-white">
-                            <td :colspan="isEditing ? 4 : 3" class="px-3 py-4 border border-gray-300 text-center text-gray-500 italic">Equipment details not specified.</td>
+                            <td colspan="3" class="px-3 py-4 border border-gray-300 text-center text-gray-500 italic">Equipment details not specified.</td>
                         </tr>
                     @endforelse
                 </tbody>
+
+                <tbody x-show="isEditing" wire:ignore style="display:none;">
+                    <template x-for="(eq, i) in equipment" :key="i">
+                        <tr class="bg-white">
+                            <td class="px-3 py-2 border border-gray-300 text-black">
+                                <input type="text" x-model="eq.equipment" class="w-full border-0 p-0 focus:ring-0 bg-transparent text-sm">
+                            </td>
+                            <td class="px-3 py-2 border border-gray-300 text-black">
+                                <input type="text" x-model="eq.training" class="w-full border-0 p-0 focus:ring-0 bg-transparent text-sm">
+                            </td>
+                            <td class="px-3 py-2 border border-gray-300 text-black">
+                                <input type="text" x-model="eq.inspection" class="w-full border-0 p-0 focus:ring-0 bg-transparent text-sm">
+                            </td>
+                            <td class="border border-gray-300 p-2 align-middle print:hidden">
+                                <button @click="deleteEquipment(i)" type="button" class="text-slate-700 hover:text-black">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
             </table>
-            <button x-show="isEditing" wire:click="addEquipment" type="button"
-                class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden" style="display:none;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                Add Equipment
-            </button>
+            <div x-show="isEditing" class="print:hidden mb-6">
+                <button @click="addEquipment()" type="button"
+                    class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    Add Equipment
+                </button>
+            </div>
 
             <table class="w-full border-collapse text-[13px] mt-6">
                 <thead>
@@ -994,37 +1023,49 @@ on JHA. </p>
                         <th x-show="isEditing" class="px-2 py-2 border border-gray-400 w-10 print:hidden" style="display:none;"></th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody x-show="!isEditing">
                     @forelse($competentActivities as $i => $act)
                         <tr class="{{ $i % 2 === 1 ? 'bg-gray-50' : 'bg-white' }}">
                             <td class="px-3 py-2.5 border border-gray-300 font-bold text-black">
-                                <input x-show="isEditing" type="text" wire:model="competentActivities.{{ $i }}.activity" class="w-full border-0 p-0 focus:ring-0 bg-transparent font-bold" style="display:none;">
-                                <span x-show="!isEditing">{{ $act['activity'] ?? 'General Supervision' }}</span>
+                                <span>{{ $act['activity'] ?? 'General Supervision' }}</span>
                             </td>
                             <td class="px-3 py-2.5 border border-gray-300 text-black">
-                                <input x-show="isEditing" type="text" wire:model="competentActivities.{{ $i }}.person" class="w-full border-0 p-0 focus:ring-0 bg-transparent" style="display:none;">
-                                <span x-show="!isEditing">{{ $act['person'] ?? 'On-site Supervisor' }}</span>
-                            </td>
-                            <td x-show="isEditing" class="border border-gray-300 p-2 align-middle print:hidden" style="display:none;">
-                                <button wire:click="deleteCompetentActivity({{ $i }})" type="button" class="text-red-400 hover:text-red-600">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                                </button>
+                                <span>{{ $act['person'] ?? 'On-site Supervisor' }}</span>
                             </td>
                         </tr>
                     @empty
                         <tr class="bg-white">
                             <td class="px-3 py-2.5 border border-gray-300 font-bold text-black">General Safety Oversight</td>
                             <td class="px-3 py-2.5 border border-gray-300 text-black">{{ $project->competent_person ?? 'To be designated' }}</td>
-                            <td x-show="isEditing" class="border border-gray-300 p-2 print:hidden" style="display:none;"></td>
                         </tr>
                     @endforelse
                 </tbody>
+
+                <tbody x-show="isEditing" wire:ignore style="display:none;">
+                    <template x-for="(act, i) in competentActivities" :key="i">
+                        <tr class="bg-white">
+                            <td class="px-3 py-2 border border-gray-300 text-black">
+                                <input type="text" x-model="act.activity" class="w-full border-0 p-0 focus:ring-0 bg-transparent font-bold text-sm">
+                            </td>
+                            <td class="px-3 py-2 border border-gray-300 text-black">
+                                <input type="text" x-model="act.person" class="w-full border-0 p-0 focus:ring-0 bg-transparent text-sm">
+                            </td>
+                            <td class="border border-gray-300 p-2 align-middle print:hidden">
+                                <button @click="deleteCompetentActivity(i)" type="button" class="text-slate-700 hover:text-black">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
             </table>
-            <button x-show="isEditing" wire:click="addCompetentActivity" type="button"
-                class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors print:hidden" style="display:none;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                Add Activity
-            </button>
+            <div x-show="isEditing" class="print:hidden mb-8">
+                <button @click="addCompetentActivity()" type="button"
+                    class="mt-2 flex items-center gap-2 text-sm font-bold text-primary border border-primary rounded-lg px-4 py-1.5 hover:bg-primary hover:text-primary-foreground transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    Add Activity
+                </button>
+            </div>
 
             {{-- Signatures --}}
             <div class="text-white font-black text-[16px] px-4 py-2.5 tracking-widest uppercase text-center" style="background-color: {{ $headerColor }}">
